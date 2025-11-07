@@ -2,6 +2,9 @@
 
 # Script de instalação e configuração da aplicação
 
+# Navegar para o diretório raiz do projeto (pai de scripts/)
+cd "$(dirname "$0")/.."
+
 echo "=========================================="
 echo "Agents ADK Application - Setup"
 echo "=========================================="

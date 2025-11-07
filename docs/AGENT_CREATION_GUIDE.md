@@ -39,7 +39,7 @@ As seguintes tools estão disponíveis para uso nos agentes:
   "name": "Agente de Horário",
   "description": "Fornece informações sobre data e hora em diferentes timezones",
   "instruction": "Você é um assistente que fornece informações sobre data e hora. Quando o usuário perguntar sobre a hora atual, use a ferramenta 'get_current_time' para obter essas informações. Sempre informe o timezone quando relevante. Seja claro e use português brasileiro.",
-  "model": "gemini-2.0-flash-exp",
+  "model": "gemini-2.0-flash",
   "tools": [
     "get_current_time"
   ]
@@ -53,7 +53,7 @@ As seguintes tools estão disponíveis para uso nos agentes:
   "name": "Assistente Completo",
   "description": "Agente versátil que pode realizar cálculos e informar a hora",
   "instruction": "Você é um assistente útil e versátil. Você pode:\n1. Realizar cálculos matemáticos usando a ferramenta 'calculator'\n2. Informar a hora atual em qualquer timezone usando a ferramenta 'get_current_time'\n\nSeja amigável, prestativo e use português brasileiro. Sempre explique o que está fazendo.",
-  "model": "gemini-2.0-flash-exp",
+  "model": "gemini-2.0-flash",
   "tools": [
     "calculator",
     "get_current_time"
@@ -68,7 +68,7 @@ As seguintes tools estão disponíveis para uso nos agentes:
   "name": "Assistente Conversacional",
   "description": "Agente para conversas e perguntas gerais",
   "instruction": "Você é um assistente amigável e prestativo. Responda às perguntas dos usuários de forma clara e útil. Use português brasileiro e seja sempre educado.",
-  "model": "gemini-2.0-flash-exp",
+  "model": "gemini-2.0-flash",
   "tools": []
 }
 ```

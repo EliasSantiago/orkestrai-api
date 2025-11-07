@@ -1,17 +1,16 @@
-# Agents ADK Application
+# Agents ADK API - Sistema Completo de Agentes de IA
 
-Aplicação Python para criar e gerenciar agentes de IA utilizando o Agent Development Kit (ADK) do Google, com suporte para modelos LLM da OpenAI e Google Gemini.
+Aplicação completa para criar e gerenciar agentes de IA utilizando o Google ADK, com suporte para context management via Redis, API REST completa e interface web customizável.
 
-## 🚀 Características
+## 🚀 Características Principais
 
 - **Google ADK**: Framework para desenvolvimento de agentes de IA
 - **Multi-LLM**: Suporte para Google Gemini e OpenAI
-- **PostgreSQL**: Banco de dados para persistência de dados
-- **Docker Compose**: Configuração simplificada do PostgreSQL
-- **API REST**: API completa para gerenciamento de usuários e agentes
-- **Autenticação**: Sistema de registro e login com JWT
-- **Agentes Persistidos**: Cada usuário pode criar e gerenciar seus próprios agentes
-- **Agentes de Teste**: Dois agentes básicos incluídos
+- **API REST Completa**: Gerenciamento de usuários, agentes e conversas
+- **Context Management**: Sistema de contexto conversacional com Redis
+- **Autenticação JWT**: Sistema seguro de registro e login
+- **PostgreSQL + Redis**: Persistência de dados e contexto
+- **Frontend Customizável**: API REST permite criar seu próprio frontend
 
 ## 📋 Pré-requisitos
 
@@ -21,291 +20,108 @@ Aplicação Python para criar e gerenciar agentes de IA utilizando o Agent Devel
   - Google Gemini API Key
   - OpenAI API Key
 
-## 🛠️ Instalação
-
-### 1. Clone o repositório
+## 🛠️ Instalação Rápida
 
 ```bash
-cd /home/ignitor/projects/agents-adk-google
-```
+# 1. Setup inicial
+./scripts/setup.sh
 
-### 2. Crie um ambiente virtual
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# ou
-.venv\Scripts\activate  # Windows
-```
-
-### 3. Instale as dependências
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure as variáveis de ambiente
-
-Crie um arquivo `.env` na raiz do projeto:
-
-```bash
+# 2. Configure .env com suas API keys
 cp .env.example .env
+# Edite .env e adicione GOOGLE_API_KEY e OPENAI_API_KEY
+
+# 3. Inicie serviços (PostgreSQL e Redis)
+./scripts/start_services.sh
+
+# 4. Inicialize banco de dados
+./scripts/init_database.sh
 ```
 
-Edite o arquivo `.env` e adicione suas API keys:
+## 🎯 Iniciar Aplicação
 
-```env
-GOOGLE_API_KEY=sua_chave_google_aqui
-OPENAI_API_KEY=sua_chave_openai_aqui
-DATABASE_URL=postgresql://agentuser:agentpass@localhost:5432/agentsdb
-DEFAULT_MODEL_GEMINI=gemini-2.0-flash-exp
-DEFAULT_MODEL_OPENAI=gpt-4o-mini
-```
-
-### 5. Inicie o PostgreSQL com Docker Compose
+### Opção 1: API REST + ADK Web (Recomendado)
 
 ```bash
-docker-compose up -d
+# Terminal 1: Iniciar API REST
+./scripts/start_api.sh
+# API em: http://localhost:8001
+# Docs em: http://localhost:8001/docs
+
+# Terminal 2: Iniciar ADK Web
+./scripts/start_adk_web.sh
+# Web UI em: http://localhost:8000
 ```
 
-Verifique se o serviço está rodando:
+### Opção 2: Apenas API REST (para frontend customizado)
 
 ```bash
-docker-compose ps
+./scripts/start_api.sh
+# Use a API para chat: POST /api/agents/chat
 ```
 
-### 6. Inicialize o banco de dados
+## 📚 Documentação
 
-```bash
-./init_database.sh
-```
+Toda a documentação está organizada em `docs/`:
 
-Isso criará as tabelas `users` e `agents` no PostgreSQL.
+- **[Guia de Início](docs/getting-started.md)** - Setup completo e instalação
+- **[Referência da API](docs/api-reference.md)** - Todos os endpoints disponíveis
+- **[Guia de Agentes](docs/agent-guide.md)** - Como criar e gerenciar agentes
+- **[Contexto Redis](docs/redis-conversations.md)** - Sistema de contexto conversacional
+- **[Frontend Customizado](docs/frontend-guide.md)** - Como criar seu próprio frontend
+- **[Arquitetura](docs/architecture.md)** - Estrutura e design da aplicação
+- **[Troubleshooting](docs/troubleshooting.md)** - Solução de problemas comuns
+- **[Migração](docs/migration.md)** - Notas de versões e migrações
 
-## 🎯 Uso
+## 🎯 Fluxo Básico de Uso
 
-### Opções de Execução
+1. **Registrar/Login**: `POST /api/auth/register` ou `/api/auth/login`
+2. **Criar Agente**: `POST /api/agents`
+3. **Chat com Agente**: `POST /api/agents/chat`
+4. **Gerenciar Contexto**: Endpoints em `/api/conversations`
 
-#### 1. Interface do ADK (Recomendado para testes)
+## 🔧 Portas Padrão
 
-**Interface Web do ADK (Mais fácil):**
-```bash
-./start_adk_web.sh
-```
-Acesse http://localhost:8000 no navegador
+- **API REST**: `8001` - http://localhost:8001
+- **ADK Web**: `8000` - http://localhost:8000
+- **PostgreSQL**: `5432`
+- **Redis**: `6379`
 
-**Modo Interativo do ADK (CLI):**
-```bash
-./run_adk_interactive.sh
-```
+## 📖 Documentação Interativa
 
-**Servidor API do ADK (para integração externa):**
-```bash
-./start_adk_api.sh
-```
+Acesse `http://localhost:8001/docs` para ver a documentação completa da API com exemplos interativos (Swagger UI).
 
-#### 2. API REST (Gerenciamento de Usuários e Agentes)
-
-**Iniciar API FastAPI:**
-```bash
-./start_api.sh
-```
-
-Acesse:
-- **API**: http://localhost:8001
-- **Documentação**: http://localhost:8001/docs
-
-**Funcionalidades:**
-- Registro e login de usuários
-- CRUD completo de agentes
-- Cada usuário gerencia seus próprios agentes
-
-Consulte `API_DOCS.md` para documentação completa da API.
-
-#### 3. Aplicação Customizada
-
-**Usando o script run.sh:**
-```bash
-./run.sh
-```
-
-**Ativando manualmente o ambiente virtual:**
-```bash
-source .venv/bin/activate  # Linux/Mac
-python -m src.main
-```
-
-**⚠️ Importante:** Sempre ative o ambiente virtual antes de executar a aplicação, ou use os scripts fornecidos que fazem isso automaticamente.
-
-### Agentes Incluídos
-
-#### 1. Greeting Agent
-Agente que fornece saudações amigáveis e pode informar a hora atual.
-
-**Ferramentas:**
-- `get_current_time` - Obtém a hora atual em qualquer timezone
-
-**⚠️ IMPORTANTE:** Agentes agora são criados via API REST!
-
-**Como criar agentes:**
-1. Inicie a API: `./start_api.sh`
-2. Acesse `http://localhost:8001/docs`
-3. Faça login e crie agentes via `POST /api/agents`
-
-**Consulte `AGENT_CREATION_GUIDE.md` para exemplos completos de payloads.**
-
-### Ferramentas Compartilhadas
-
-As ferramentas em `/tools` podem ser usadas por qualquer agente:
-
-- **calculator_tool**: Calcula expressões matemáticas de forma segura
-- **time_tool**: Obtém informações de data e hora em diferentes timezones
-
-## 📁 Estrutura do Projeto
+## 🏗️ Estrutura do Projeto
 
 ```
-agents-adk-google/
-├── agents/                    # ⚠️ DEPRECATED - Agentes agora vêm do banco de dados
-│   ├── greeting_agent/
-│   │   ├── agent.py          # Agente de saudação com root_agent
-│   │   └── __init__.py
-│   └── calculator_agent/
-│       ├── agent.py          # Agente de cálculos com root_agent
-│       └── __init__.py
-├── tools/                     # Ferramentas compartilhadas
-│   ├── __init__.py
-│   ├── calculator_tool.py    # Ferramenta de cálculos
-│   └── time_tool.py          # Ferramenta de tempo
-├── src/                       # Aplicação customizada (opcional)
-│   ├── __init__.py
-│   ├── config.py             # Configurações da aplicação
-│   ├── database.py           # Conexão e setup do PostgreSQL
-│   ├── main.py              # Ponto de entrada principal
-│   └── agents/              # Agentes para aplicação customizada
-│       ├── __init__.py
-│       ├── greeting_agent.py
-│       └── calculator_agent.py
-├── docker-compose.yml        # Configuração do PostgreSQL
-├── requirements.txt          # Dependências Python
-├── .env.example             # Exemplo de variáveis de ambiente
-├── run.sh                   # Script para executar aplicação customizada
-├── run_adk_interactive.sh   # Script para modo interativo ADK
-├── start_adk_api.sh         # Script para servidor API ADK
-├── start_adk_web.sh         # Script para interface web ADK
-├── setup.sh                 # Script de instalação
-├── README.md                # Este arquivo
-└── ADK_INTERFACE.md         # Guia da interface ADK
+.
+├── docs/               # Documentação organizada
+├── scripts/            # Scripts de inicialização
+├── src/                # Código fonte
+│   ├── api/           # Endpoints REST
+│   ├── services/      # Serviços de negócio
+│   └── ...
+├── tools/              # Ferramentas para agentes
+└── docker-compose.yml  # PostgreSQL e Redis
 ```
 
-## 🔧 Configuração Avançada
+## 📝 Scripts Disponíveis
 
-### Modelos Disponíveis
+Todos os scripts estão em `scripts/`:
 
-#### Google Gemini
-- `gemini-2.0-flash-exp` (padrão)
-- `gemini-1.5-pro`
-- `gemini-1.5-flash`
+- `setup.sh` - Instalação inicial
+- `start_services.sh` - Iniciar PostgreSQL e Redis
+- `start_api.sh` - Iniciar API REST (porta 8001)
+- `start_adk_web.sh` - Iniciar ADK Web (porta 8000)
+- `init_database.sh` - Inicializar banco de dados
+- `migrate_database.sh` - Migrações do banco
 
-#### OpenAI
-- `gpt-4o-mini` (padrão)
-- `gpt-4o`
-- `gpt-3.5-turbo`
+## 🚀 Próximos Passos
 
-Você pode alterar os modelos padrão no arquivo `.env`.
-
-### Banco de Dados
-
-O PostgreSQL está configurado para rodar na porta `5432` com as seguintes credenciais:
-
-- **Usuário**: `agentuser`
-- **Senha**: `agentpass`
-- **Database**: `agentsdb`
-
-Para alterar, edite o arquivo `docker-compose.yml` e o `.env`.
-
-## 🧪 Testes
-
-Para testar os agentes, execute a aplicação e use os comandos interativos:
-
-```bash
-python -m src.main
-```
-
-Exemplo de teste:
-
-```
-Você: greet: Olá, bom dia!
-Greeting Agent: Olá! Bom dia para você também! Como posso ajudar hoje?
-
-Você: calc: Qual é a raiz quadrada de 144?
-Calculator Agent: A raiz quadrada de 144 é 12.
-```
-
-## 📝 Desenvolvimento
-
-### Criar um Novo Agente
-
-1. Crie um novo arquivo em `src/agents/`
-2. Defina a classe do agente seguindo o padrão dos agentes existentes
-3. Importe o agente em `src/agents/__init__.py`
-4. Adicione o agente em `src/main.py`
-
-Exemplo:
-
-```python
-# src/agents/my_agent.py
-from google.adk.agents import Agent
-from src.config import Config
-
-class MyAgent:
-    def __init__(self):
-        self.agent = Agent(
-            model=Config.DEFAULT_MODEL_GEMINI,
-            name='my_agent',
-            description="Descrição do agente",
-            instruction="Instruções para o agente",
-        )
-    
-    def process(self, message: str) -> str:
-        return self.agent.run(message)
-```
-
-## 🐛 Solução de Problemas
-
-### Erro de conexão com o banco de dados
-
-Verifique se o PostgreSQL está rodando:
-
-```bash
-docker-compose ps
-docker-compose logs postgres
-```
-
-### Erro de API Key
-
-Certifique-se de que as variáveis de ambiente estão configuradas corretamente no arquivo `.env`.
-
-### Erro de importação do ADK
-
-Verifique se o ADK foi instalado:
-
-```bash
-pip show google-adk
-```
-
-Se não estiver instalado:
-
-```bash
-pip install google-adk
-```
+1. Leia o [Guia de Início](docs/getting-started.md)
+2. Crie seu primeiro agente com o [Guia de Agentes](docs/agent-guide.md)
+3. Explore a [Referência da API](docs/api-reference.md)
+4. Configure [Contexto Redis](docs/redis-conversations.md) para conversas persistentes
 
 ## 📄 Licença
 
-Este projeto é um exemplo de uso do Google ADK.
-
-## 🔗 Recursos
-
-- [Google ADK Documentation](https://google.github.io/adk-docs/)
-- [OpenAI API Documentation](https://platform.openai.com/docs)
-- [Google Gemini API](https://ai.google.dev/docs)
-
+Este projeto utiliza o Google ADK e está sujeito às licenças dos respectivos componentes.

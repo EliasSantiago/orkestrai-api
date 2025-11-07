@@ -53,3 +53,22 @@ class Agent(Base):
     def __repr__(self):
         return f"<Agent(id={self.id}, name={self.name}, user_id={self.user_id})>"
 
+
+class PasswordResetToken(Base):
+    """Password reset token model."""
+    
+    __tablename__ = "password_reset_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(255), unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship with user
+    user = relationship("User")
+    
+    def __repr__(self):
+        return f"<PasswordResetToken(id={self.id}, user_id={self.user_id}, expires_at={self.expires_at}, used={self.used})>"
+

@@ -25,6 +25,9 @@ if __name__ == "__main__":
         print("\nTabelas criadas:")
         print("  - users")
         print("  - agents")
+        print("  - password_reset_tokens")
+        print("  - conversation_sessions")
+        print("  - conversation_messages")
     except Exception as e:
         print(f"✗ Erro ao criar tabelas: {e}")
         exit(1)

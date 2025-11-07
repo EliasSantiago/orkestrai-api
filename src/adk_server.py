@@ -46,8 +46,8 @@ def main():
     agent_dir = sync_agents_from_db()
     
     # ADK expects: agents/<agent_name>/agent.py
-    # Our structure: .agents_db/agents/db_agents/agent.py
-    # So we need to point to .agents_db/agents (the parent of db_agents)
+    # Our structure: .agents_db/agents/<agent_name>/agent.py
+    # So we need to point to .agents_db/agents (the parent directory)
     agents_parent_dir = agent_dir.parent.resolve()
     
     # Ensure project root is in PYTHONPATH for ADK

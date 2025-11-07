@@ -1,7 +1,7 @@
 """Agent API routes."""
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import jwt
@@ -33,23 +33,50 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
         )
 
 
+def sync_agents_to_files_sync():
+    """Sync agents from database to files (synchronous, runs in background)."""
+    try:
+        from src.adk_loader import sync_agents_from_db
+        sync_agents_from_db()
+    except Exception as e:
+        # Don't fail the API request if sync fails
+        # This is a background operation
+        import traceback
+        print(f"⚠ Warning: Could not sync agents to files: {e}")
+        print(traceback.format_exc())
+
+
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     agent_data: AgentCreate,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Create a new agent for the current user."""
-    agent = AgentService.create_agent(
-        db=db,
-        user_id=user_id,
-        name=agent_data.name,
-        description=agent_data.description,
-        instruction=agent_data.instruction,
-        model=agent_data.model,
-        tools=agent_data.tools
-    )
-    return agent
+    try:
+        agent = AgentService.create_agent(
+            db=db,
+            user_id=user_id,
+            name=agent_data.name,
+            description=agent_data.description,
+            instruction=agent_data.instruction,
+            model=agent_data.model,
+            tools=agent_data.tools
+        )
+        # Sync agents to files after creation (non-blocking background task)
+        # BackgroundTasks ensures the response is returned before sync starts
+        background_tasks.add_task(sync_agents_to_files_sync)
+        
+        return agent
+    except Exception as e:
+        import traceback
+        print(f"✗ Error creating agent: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating agent: {str(e)}"
+        )
 
 
 @router.get("", response_model=List[AgentResponse])
@@ -82,6 +109,7 @@ async def get_agent(
 async def update_agent(
     agent_id: int,
     agent_data: AgentUpdate,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -101,12 +129,15 @@ async def update_agent(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found"
         )
+    # Sync agents to files after update (non-blocking background task)
+    background_tasks.add_task(sync_agents_to_files_sync)
     return agent
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent(
     agent_id: int,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -117,4 +148,6 @@ async def delete_agent(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found"
         )
+    # Sync agents to files after deletion (non-blocking background task)
+    background_tasks.add_task(sync_agents_to_files_sync)
 

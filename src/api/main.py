@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api import auth_routes, agent_routes, conversation_routes, adk_integration_routes
+from src.api import auth_routes, agent_routes, conversation_routes, adk_integration_routes, agent_chat_routes
 from src.database import init_db
 
 
@@ -35,6 +35,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_routes.router)
 app.include_router(agent_routes.router)
+app.include_router(agent_chat_routes.router)
 app.include_router(conversation_routes.router)
 app.include_router(adk_integration_routes.router)
 

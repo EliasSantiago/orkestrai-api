@@ -1,13 +1,14 @@
 """
-Middleware for integrating ADK conversations with Redis.
+Middleware for integrating ADK conversations with Redis and PostgreSQL.
 
 This module provides hooks to capture and store ADK conversation messages
-in Redis for context persistence.
+in both Redis (cache) and PostgreSQL (persistent storage).
 """
 
 from typing import Optional, Dict, Any
-from src.conversation_service import ConversationService
+from src.hybrid_conversation_service import HybridConversationService
 from src.redis_client import get_redis_client
+from src.database import SessionLocal
 
 
 class ADKConversationMiddleware:
@@ -62,7 +63,7 @@ class ADKConversationMiddleware:
         user_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """Save a user message to Redis."""
+        """Save a user message to Redis + PostgreSQL."""
         if user_id is None:
             user_id = ADKConversationMiddleware.get_user_id_from_session(session_id)
         
@@ -70,12 +71,18 @@ class ADKConversationMiddleware:
             # Cannot save without user_id
             return False
         
-        return ConversationService.add_user_message(
-            user_id=user_id,
-            session_id=session_id,
-            content=content,
-            metadata=metadata
-        )
+        # Use hybrid service (Redis + PostgreSQL)
+        db = SessionLocal()
+        try:
+            return HybridConversationService.add_user_message(
+                user_id=user_id,
+                session_id=session_id,
+                content=content,
+                metadata=metadata,
+                db=db
+            )
+        finally:
+            db.close()
     
     @staticmethod
     def save_assistant_message(
@@ -84,19 +91,25 @@ class ADKConversationMiddleware:
         user_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """Save an assistant message to Redis."""
+        """Save an assistant message to Redis + PostgreSQL."""
         if user_id is None:
             user_id = ADKConversationMiddleware.get_user_id_from_session(session_id)
         
         if user_id is None:
             return False
         
-        return ConversationService.add_assistant_message(
-            user_id=user_id,
-            session_id=session_id,
-            content=content,
-            metadata=metadata
-        )
+        # Use hybrid service (Redis + PostgreSQL)
+        db = SessionLocal()
+        try:
+            return HybridConversationService.add_assistant_message(
+                user_id=user_id,
+                session_id=session_id,
+                content=content,
+                metadata=metadata,
+                db=db
+            )
+        finally:
+            db.close()
     
     @staticmethod
     def get_conversation_context(
@@ -104,21 +117,27 @@ class ADKConversationMiddleware:
         user_id: Optional[int] = None,
         limit: Optional[int] = None
     ) -> list:
-        """Get conversation context for a session."""
+        """Get conversation context for a session (from Redis or PostgreSQL)."""
         if user_id is None:
             user_id = ADKConversationMiddleware.get_user_id_from_session(session_id)
         
         if user_id is None:
             return []
         
-        history = ConversationService.get_conversation_history(
-            user_id=user_id,
-            session_id=session_id,
-            limit=limit
-        )
-        
-        # Format for LLM context
-        return ConversationService.format_history_for_llm(history)
+        # Use hybrid service (tries Redis first, falls back to PostgreSQL)
+        db = SessionLocal()
+        try:
+            history = HybridConversationService.get_conversation_history(
+                user_id=user_id,
+                session_id=session_id,
+                limit=limit,
+                db=db
+            )
+            
+            # Format for LLM context
+            return HybridConversationService.format_history_for_llm(history)
+        finally:
+            db.close()
 
 
 # Global instance

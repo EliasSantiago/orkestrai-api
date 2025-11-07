@@ -96,3 +96,111 @@ def create_user(db: Session, name: str, email: str, password: str) -> User:
     db.refresh(db_user)
     return db_user
 
+
+def generate_password_reset_token() -> str:
+    """Generate a secure random token for password reset."""
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
+def create_password_reset_token(db: Session, user_id: int, expires_hours: int = 24) -> str:
+    """
+    Create a password reset token for a user.
+    
+    Args:
+        db: Database session
+        user_id: User ID
+        expires_hours: Hours until token expires (default: 24)
+    
+    Returns:
+        The generated token string
+    """
+    from src.models import PasswordResetToken
+    
+    # Generate token
+    token = generate_password_reset_token()
+    
+    # Calculate expiration
+    expires_at = datetime.utcnow() + timedelta(hours=expires_hours)
+    
+    # Create token record
+    reset_token = PasswordResetToken(
+        token=token,
+        user_id=user_id,
+        expires_at=expires_at
+    )
+    
+    db.add(reset_token)
+    db.commit()
+    db.refresh(reset_token)
+    
+    return token
+
+
+def get_password_reset_token(db: Session, token: str) -> Optional['PasswordResetToken']:
+    """
+    Get a password reset token if it's valid and not expired.
+    
+    Args:
+        db: Database session
+        token: Token string
+    
+    Returns:
+        PasswordResetToken if valid, None otherwise
+    """
+    from src.models import PasswordResetToken
+    
+    reset_token = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == token,
+        PasswordResetToken.used == False,
+        PasswordResetToken.expires_at > datetime.utcnow()
+    ).first()
+    
+    return reset_token
+
+
+def mark_password_reset_token_as_used(db: Session, token: str) -> bool:
+    """
+    Mark a password reset token as used.
+    
+    Args:
+        db: Database session
+        token: Token string
+    
+    Returns:
+        True if token was marked as used, False otherwise
+    """
+    from src.models import PasswordResetToken
+    
+    reset_token = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == token
+    ).first()
+    
+    if reset_token:
+        reset_token.used = True
+        db.commit()
+        return True
+    
+    return False
+
+
+def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
+    """
+    Update a user's password.
+    
+    Args:
+        db: Database session
+        user_id: User ID
+        new_password: New password (plain text)
+    
+    Returns:
+        True if password was updated, False otherwise
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return False
+    
+    user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    return True
+

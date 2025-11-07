@@ -41,6 +41,24 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    email: EmailStr
+    new_password: str
+    password_confirm: str
+    
+    @model_validator(mode='after')
+    def passwords_match(self):
+        """Validate that new_password and password_confirm match."""
+        if self.new_password != self.password_confirm:
+            raise ValueError("Passwords do not match")
+        return self
+
+
 # Agent schemas
 class AgentCreate(BaseModel):
     name: str
@@ -48,6 +66,20 @@ class AgentCreate(BaseModel):
     instruction: str
     model: str = "gemini-2.0-flash-exp"
     tools: Optional[List[str]] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Assistente Completo",
+                "description": "Agente versátil que pode realizar cálculos e informar a hora",
+                "instruction": "Você é um assistente útil e versátil. Você pode:\n1. Realizar cálculos matemáticos usando a ferramenta 'calculator'\n2. Informar a hora atual em qualquer timezone usando a ferramenta 'get_current_time'\n\nSeja amigável, prestativo e use português brasileiro. Sempre explique o que está fazendo.",
+                "model": "gemini-2.0-flash",
+                "tools": [
+                    "calculator",
+                    "get_current_time"
+                ]
+            }
+        }
 
 
 class AgentUpdate(BaseModel):

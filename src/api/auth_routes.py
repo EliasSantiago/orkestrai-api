@@ -4,6 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from src.database import get_db
+from src.api.schemas import (
+    UserCreate, UserResponse, Token, LoginRequest,
+    ForgotPasswordRequest, ResetPasswordRequest
+)
 from src.auth import (
     authenticate_user_by_email,
     create_user,
@@ -11,9 +15,15 @@ from src.auth import (
     get_user_by_name,
     get_user_by_email,
     SECRET_KEY,
-    ALGORITHM
+    ALGORITHM,
+    create_password_reset_token,
+    get_password_reset_token,
+    mark_password_reset_token_as_used,
+    update_user_password
 )
-from src.api.schemas import UserCreate, UserResponse, Token, LoginRequest
+from src.config import Config
+from src.email_service import send_password_reset_email
+from urllib.parse import urlencode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer()
@@ -117,4 +127,108 @@ async def get_current_user(
         )
     
     return user
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Request password reset.
+    
+    Sends an email with a password reset link to the user.
+    For security reasons, always returns success even if email doesn't exist.
+    """
+    # Find user by email
+    user = get_user_by_email(db, request.email)
+    
+    # Always return success to prevent email enumeration attacks
+    # Only proceed if user exists
+    if user and user.is_active:
+        # Create password reset token
+        token = create_password_reset_token(
+            db=db,
+            user_id=user.id,
+            expires_hours=Config.PASSWORD_RESET_TOKEN_EXPIRE_HOURS
+        )
+        
+        # Build reset URL with token and email as query parameters
+        reset_params = urlencode({
+            "token": token,
+            "email": request.email
+        })
+        reset_url = f"{Config.PASSWORD_RESET_BASE_URL}/reset-password?{reset_params}"
+        
+        # Send email
+        email_sent = send_password_reset_email(
+            email=user.email,
+            reset_token=token,
+            reset_url=reset_url
+        )
+        
+        if not email_sent:
+            # Log warning but don't expose to user
+            print(f"⚠ Failed to send password reset email to {user.email}")
+    
+    # Always return success message
+    return {
+        "message": "If the email exists, a password reset link has been sent.",
+        "status": "success"
+    }
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using token from email.
+    
+    Requires:
+    - token: Password reset token from email
+    - email: User's email address
+    - new_password: New password
+    - password_confirm: Confirmation of new password
+    """
+    # Validate token
+    reset_token = get_password_reset_token(db, request.token)
+    
+    if not reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Verify email matches token's user
+    user = get_user_by_email(db, request.email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if reset_token.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token does not match email address"
+        )
+    
+    # Update password
+    success = update_user_password(db, user.id, request.new_password)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update password"
+        )
+    
+    # Mark token as used
+    mark_password_reset_token_as_used(db, request.token)
+    
+    return {
+        "message": "Password has been reset successfully",
+        "status": "success"
+    }
 
