@@ -1,41 +1,33 @@
 """Agent execution API routes for chat/interaction."""
 
-import uuid
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from jose import jwt
-from src.database import get_db
-from src.auth import SECRET_KEY, ALGORITHM
-from src.services.agent_service import AgentService
-from src.models import Agent as AgentModel
-from src.hybrid_conversation_service import HybridConversationService
-from src.services.adk_context_hooks import inject_context_into_agent, set_session_context
 from src.adk_conversation_middleware import get_adk_middleware
+from src.api.dependencies import get_current_user_id
+from src.api.di import get_chat_with_agent_use_case, get_get_agent_use_case
+from src.application.use_cases.agents import ChatWithAgentUseCase, GetAgentUseCase
+from src.domain.exceptions import AgentNotFoundError, UnsupportedModelError, InvalidModelError
+from src.infrastructure.database.entity_mapper import agent_entity_to_model
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
+
+def generate_session_id() -> str:
+    """
+    Generate a session ID using UUID format.
+    
+    Format: UUID v4 (standard format)
+    Example: cc9e7f12-0413-49bc-91dd-7a5f6f2500da
+    
+    Returns:
+        Session ID string in UUID format (without prefix)
+    """
+    import uuid
+    return str(uuid.uuid4())
+
 router = APIRouter(prefix="/api/agents", tags=["agents"])
-security = HTTPBearer()
-
-
-def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> int:
-    """Get current user ID from token."""
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
-            )
-        return user_id
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
 
 
 def sanitize_agent_name(name: str, agent_id: int) -> str:
@@ -70,14 +62,33 @@ class ChatRequest(BaseModel):
     message: str
     agent_id: int  # Required: must specify which agent to use
     session_id: Optional[str] = None  # Optional: auto-generated if not provided
+    model: Optional[str] = None  # Optional: override agent's model (e.g., "openai/gpt-4o-mini", "gemini/gemini-2.0-flash-exp")
     
     class Config:
         json_schema_extra = {
-            "example": {
-                "message": "Olá, como você pode me ajudar?",
-                "agent_id": 1,
-                "session_id": "session_abc123"
-            }
+            "examples": [
+                {
+                    "message": "Faça um resumo das principais notícias sobre IA desta semana",
+                    "agent_id": 1,
+                    "session_id": "",
+                    "model": None
+                },
+                {
+                    "message": "Qual a previsão do tempo para São Paulo hoje?",
+                    "agent_id": 2,
+                    "session_id": "cc9e7f12-0413-49bc-91dd-7a5f6f2500da"
+                },
+                {
+                    "message": "Extraia os dados principais desta página: https://exemplo.com",
+                    "agent_id": 3,
+                    "session_id": "",
+                    "model": "openai/gpt-4o"
+                },
+                {
+                    "message": "Olá, como você pode me ajudar?",
+                    "agent_id": 1
+                }
+            ]
         }
 
 
@@ -87,13 +98,15 @@ class ChatResponse(BaseModel):
     agent_id: int
     agent_name: str
     session_id: Optional[str] = None
+    model_used: Optional[str] = None  # Which model was used for this response
 
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_agent(
     request: ChatRequest,
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
+    chat_use_case: ChatWithAgentUseCase = Depends(get_chat_with_agent_use_case),
+    get_agent_use_case: GetAgentUseCase = Depends(get_get_agent_use_case)
 ):
     """
     Chat with an agent.
@@ -108,185 +121,62 @@ async def chat_with_agent(
     
     **Optional Fields:**
     - `session_id`: Session ID for conversation continuity (auto-generated if not provided)
+    - `model`: Override the agent's default model (e.g., "gpt-4o-mini", "gemini-2.5-flash", "claude-3-5-sonnet-latest")
     
     **Example Request Body:**
     ```json
     {
       "message": "Olá, como você pode me ajudar?",
       "agent_id": 1,
-      "session_id": "session_abc123"
+      "session_id": "cc9e7f12-0413-49bc-91dd-7a5f6f2500da",
+      "model": "gpt-4o-mini"
     }
     ```
+    
+    **Model Override:**
+    If you specify a `model` in the request, it will override the agent's default model for this conversation.
+    This is useful when:
+    - The default model is overloaded (503 error)
+    - You want to test different models with the same agent
+    - You need a faster/cheaper model for simple queries
     """
     # Generate session_id if not provided
-    session_id = request.session_id or f"session_{uuid.uuid4().hex[:12]}"
+    session_id = request.session_id or generate_session_id()
     
     # Associate session with user if not already associated
     middleware = get_adk_middleware()
     if not middleware.get_user_id_from_session(session_id):
         middleware.set_user_id_for_session(session_id, user_id)
     
-    # Get agent by ID (required)
-    agent_model = AgentService.get_agent_by_id(db, request.agent_id, user_id)
-    if not agent_model:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Agent not found"
-        )
-    
-    # Load ADK agent from database model
     try:
-        from google.adk.agents import Agent
-        from google.adk.runners import InMemoryRunner
-        from google.genai import types
-        from tools import calculator, get_current_time
+        # Get agent info for response (need name and id)
+        agent_entity = get_agent_use_case.execute(request.agent_id, user_id)
+        agent_model = agent_entity_to_model(agent_entity)
         
-        # Get tools
-        tool_map = {
-            "calculator": calculator,
-            "get_current_time": get_current_time,
-        }
-        tool_names = agent_model.tools or []
-        tools = [tool_map[name] for name in tool_names if name in tool_map]
+        # Determine model name
+        model_name = request.model or agent_entity.model or "gemini-2.0-flash-exp"
         
-        # Sanitize agent name for ADK (must be valid identifier)
-        agent_name_sanitized = sanitize_agent_name(agent_model.name, agent_model.id)
-        
-        # Create ADK agent
-        adk_agent = Agent(
-            model=str(agent_model.model) if agent_model.model else "gemini-2.0-flash-exp",
-            name=str(agent_name_sanitized),
-            description=str(agent_model.description) if agent_model.description else "",
-            instruction=str(agent_model.instruction),
-            tools=tools if tools else [],
-        )
-        
-        # Save user message to Redis + PostgreSQL BEFORE injecting context
-        # This ensures the current message is included in the context
-        HybridConversationService.add_user_message(
+        # Execute chat use case (handles all the complex logic)
+        response = await chat_use_case.execute(
             user_id=user_id,
+            agent_id=request.agent_id,
+            message=request.message,
             session_id=session_id,
-            content=request.message,
-            db=db
-        )
-        
-        # Set session context for context injection
-        set_session_context(session_id, user_id)
-        
-        # Inject conversation context into agent BEFORE creating runner
-        # This modifies the agent's instruction to include conversation history
-        # We do this AFTER saving the message so it's included in context
-        # IMPORTANT: Must inject BEFORE creating Runner, as Runner may clone the agent
-        inject_context_into_agent(adk_agent, session_id, user_id)
-        
-        # Create Runner - use a consistent app_name
-        # The app_name should match the directory structure or be a simple identifier
-        app_name = "adk_agent_app"  # Use a consistent app name
-        
-        runner = InMemoryRunner(
-            agent=adk_agent,
-            app_name=app_name
-        )
-        
-        # Create or get session in ADK's session service
-        # The session must exist before running the agent
-        try:
-            session = await runner.session_service.get_session(
-                app_name=app_name,
-                user_id=str(user_id),
-                session_id=session_id
-            )
-            if not session:
-                # Create session if it doesn't exist
-                session = await runner.session_service.create_session(
-                    app_name=app_name,
-                    user_id=str(user_id),
-                    session_id=session_id
-                )
-        except Exception as session_error:
-            # If session creation fails, try to create it anyway
-            try:
-                session = await runner.session_service.create_session(
-                    app_name=app_name,
-                    user_id=str(user_id),
-                    session_id=session_id
-                )
-            except Exception:
-                # If session already exists, that's fine
-                pass
-        
-        # Prepare message as Content object for ADK
-        message_str = str(request.message).strip()
-        if not message_str:
-            raise ValueError("Message cannot be empty")
-        
-        # Create Content object for ADK
-        user_content = types.Content(parts=[types.Part(text=message_str)], role='user')
-        
-        # Execute agent using Runner.run_async - this is the correct way
-        response = None
-        chunks = []
-        try:
-            async for event in runner.run_async(
-                user_id=str(user_id),
-                session_id=session_id,
-                new_message=user_content
-            ):
-                # Extract text from events
-                if hasattr(event, 'content') and event.content:
-                    # Event.content can be a list of Content objects
-                    for content in event.content if isinstance(event.content, list) else [event.content]:
-                        if hasattr(content, 'parts') and content.parts:
-                            for part in content.parts:
-                                if hasattr(part, 'text') and part.text:
-                                    chunks.append(part.text)
-                                elif isinstance(part, str):
-                                    chunks.append(part)
-                        elif isinstance(content, str):
-                            chunks.append(content)
-                    # Also check if event has text directly
-                    if hasattr(event, 'text') and event.text:
-                        chunks.append(event.text)
-            
-            # Join all chunks to form the complete response
-            response = ''.join(chunks) if chunks else None
-        except Exception as agent_error:
-            import traceback
-            error_trace = traceback.format_exc()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error executing agent: {str(agent_error)}\nTraceback: {error_trace}"
-            )
-        
-        # Ensure response is a string
-        # ADK run_live/run_async may return different types
-        if response is None:
-            response = "I received your message but couldn't generate a response."
-        elif isinstance(response, dict):
-            # If response is a dict, try to extract text/message/content
-            response = response.get('text') or response.get('message') or response.get('content') or str(response)
-        elif not isinstance(response, str):
-            # Convert to string if it's not already
-            response = str(response)
-        
-        # Save assistant response to Redis + PostgreSQL
-        HybridConversationService.add_assistant_message(
-            user_id=user_id,
-            session_id=session_id,
-            content=response,
-            db=db
+            model_override=request.model
         )
         
         return ChatResponse(
             response=response,
             agent_id=agent_model.id,
             agent_name=agent_model.name,
-            session_id=session_id
+            session_id=session_id,
+            model_used=model_name
         )
         
-    except HTTPException:
+    except (AgentNotFoundError, InvalidModelError, UnsupportedModelError):
         raise
     except Exception as e:
+        logger.error(f"Error executing agent: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error executing agent: {str(e)}"

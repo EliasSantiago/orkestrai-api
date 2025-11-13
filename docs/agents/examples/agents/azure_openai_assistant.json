@@ -1,0 +1,9 @@
+{
+  "name": "Assistente Azure OpenAI",
+  "description": "Assistente usando GPT-4o via Azure OpenAI (requer configuração Azure)",
+  "instruction": "Você é um assistente corporativo profissional. Forneça respostas precisas, bem estruturadas e adequadas ao ambiente corporativo.",
+  "model": "azure/gpt-4o",
+  "tools": [],
+  "use_file_search": false
+}
+

@@ -12,13 +12,15 @@ from sqlalchemy.orm import Session
 from google.adk.agents import Agent
 from src.database import SessionLocal
 from src.models import Agent as AgentModel
-from tools import calculator, get_current_time
-
+from tools import calculator, get_current_time, tavily_web_search
 
 # Tool mapping from database names to actual functions
+# Note: MCP tools are loaded dynamically at runtime via agent_chat_routes.py
+# They are not included here as they require user-specific clients
 TOOL_MAP = {
     "calculator": calculator,
     "get_current_time": get_current_time,
+    "tavily_web_search": tavily_web_search,
 }
 
 
@@ -339,6 +341,9 @@ def create_dynamic_agents_module(db_agents: List[AgentModel], output_dir: Path) 
                 tool_list.append("calculator")
             elif tool_name == "get_current_time":
                 tool_list.append("get_current_time")
+            elif "_" in tool_name:
+                # MCP tools (dynamically loaded, format: provider_toolname)
+                tool_list.append(tool_name)
         
         description = (db_agent.description or "").replace("'", "\\'").replace("\n", "\\n")
         instruction = db_agent.instruction.replace("'", "\\'").replace("\n", "\\n")
@@ -378,6 +383,8 @@ def create_dynamic_agents_module(db_agents: List[AgentModel], output_dir: Path) 
             "# Ensure tools can be imported",
             "try:",
             "    from tools import calculator, get_current_time",
+            "    # Note: MCP tools are loaded dynamically at runtime",
+            "    # They are not imported here as they require user-specific clients",
             "except ImportError as e:",
             "    import sys",
             "    if project_root_str not in sys.path:",

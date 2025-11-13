@@ -1,0 +1,9 @@
+{
+  "name": "Assistente GPT-3.5 Turbo",
+  "description": "Assistente simples e econômico para tarefas básicas",
+  "instruction": "Você é um assistente simples e direto. Responda perguntas de forma clara e objetiva.",
+  "model": "openai/gpt-3.5-turbo",
+  "tools": [],
+  "use_file_search": false
+}
+

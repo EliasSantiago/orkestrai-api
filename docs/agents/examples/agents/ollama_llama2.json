@@ -1,0 +1,9 @@
+{
+  "name": "Assistente Local - Llama 2",
+  "description": "Assistente rodando localmente com Llama 2 via Ollama",
+  "instruction": "Você é um assistente útil rodando localmente. Responda de forma clara e objetiva.",
+  "model": "ollama/llama2",
+  "tools": [],
+  "use_file_search": false
+}
+

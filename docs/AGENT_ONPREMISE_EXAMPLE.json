@@ -1,0 +1,28 @@
+{
+  "name": "Assistente On-Premise",
+  "description": "Assistente inteligente usando modelo LLM hospedado em infraestrutura on-premise",
+  "model": "gpt-oss:20b",
+  "instruction": "Você é um assistente útil e prestativo. Responda sempre em português do Brasil, de forma clara e objetiva. Use suas ferramentas quando necessário para buscar informações atualizadas ou realizar cálculos.",
+  "tools": [
+    {
+      "name": "calculator",
+      "description": "Calculadora para operações matemáticas",
+      "enabled": true
+    },
+    {
+      "name": "time",
+      "description": "Obter data e hora atual",
+      "enabled": true
+    }
+  ],
+  "use_file_search": false,
+  "parameters": {
+    "temperature": 0.1,
+    "top_p": 0.15,
+    "top_k": 0,
+    "num_predict": 1000,
+    "repeat_penalty": 1.1,
+    "num_ctx": 4096
+  }
+}
+

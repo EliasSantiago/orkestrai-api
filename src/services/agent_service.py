@@ -16,7 +16,8 @@ class AgentService:
         description: Optional[str],
         instruction: str,
         model: str = "gemini-2.0-flash-exp",
-        tools: Optional[List[str]] = None
+        tools: Optional[List[str]] = None,
+        use_file_search: bool = False
     ) -> Agent:
         """Create a new agent for a user."""
         agent = Agent(
@@ -25,6 +26,7 @@ class AgentService:
             instruction=instruction,
             model=model,
             tools=tools or [],
+            use_file_search=use_file_search,
             user_id=user_id
         )
         db.add(agent)
@@ -58,7 +60,8 @@ class AgentService:
         description: Optional[str] = None,
         instruction: Optional[str] = None,
         model: Optional[str] = None,
-        tools: Optional[List[str]] = None
+        tools: Optional[List[str]] = None,
+        use_file_search: Optional[bool] = None
     ) -> Optional[Agent]:
         """Update an agent (only if owned by user)."""
         agent = AgentService.get_agent_by_id(db, agent_id, user_id)
@@ -75,6 +78,8 @@ class AgentService:
             agent.model = model
         if tools is not None:
             agent.tools = tools
+        if use_file_search is not None:
+            agent.use_file_search = use_file_search
         
         db.commit()
         db.refresh(agent)

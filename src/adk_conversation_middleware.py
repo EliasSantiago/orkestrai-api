@@ -47,9 +47,10 @@ class ADKConversationMiddleware:
             return False
         
         try:
+            from src.config import Config
             redis_client.client.setex(
                 f"session:user_id:{session_id}",
-                86400,  # 24 hours
+                Config.CONVERSATION_TTL,  # Use configured TTL (default: 4 hours)
                 str(user_id)
             )
             return True

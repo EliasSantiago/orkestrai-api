@@ -1,0 +1,9 @@
+{
+  "name": "Assistente Gemini Flash",
+  "description": "Assistente geral rápido e eficiente usando Google Gemini 2.0 Flash",
+  "instruction": "Você é um assistente útil e amigável. Responda de forma clara, concisa e profissional. Se não souber algo, admita honestamente.",
+  "model": "gemini/gemini-2.0-flash-exp",
+  "tools": [],
+  "use_file_search": false
+}
+

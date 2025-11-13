@@ -1,32 +1,10 @@
 """API routes for ADK integration with conversation tracking."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt
-from src.auth import SECRET_KEY, ALGORITHM
 from src.adk_conversation_middleware import get_adk_middleware
+from src.api.dependencies import get_current_user_id
 
 router = APIRouter(prefix="/api/adk", tags=["adk-integration"])
-security = HTTPBearer()
-
-
-def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> int:
-    """Get current user ID from token."""
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
-            )
-        return user_id
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
 
 
 @router.post("/sessions/{session_id}/associate")

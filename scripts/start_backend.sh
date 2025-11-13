@@ -49,15 +49,29 @@ fi
 # Verificar conexão com banco de dados
 echo ""
 echo "Verificando banco de dados..."
-python -c "from src.database import test_connection; exit(0 if test_connection() else 1)" 2>/dev/null
-if [ $? -ne 0 ]; then
+python -c "from src.database import test_connection; exit(0 if test_connection() else 1)" 2>&1
+DB_CONNECTION_STATUS=$?
+if [ $DB_CONNECTION_STATUS -ne 0 ]; then
     echo "⚠ Aviso: Não foi possível conectar ao banco de dados"
     echo "  Tentando inicializar o banco de dados..."
-    python src/init_db.py 2>/dev/null
-    if [ $? -ne 0 ]; then
+    python src/init_db.py 2>&1
+    INIT_STATUS=$?
+    if [ $INIT_STATUS -ne 0 ]; then
+        echo ""
         echo "✗ Erro ao inicializar banco de dados"
-        echo "  Certifique-se de que o PostgreSQL está rodando:"
+        echo ""
+        echo "Possíveis causas:"
+        echo "  1. PostgreSQL não está rodando"
+        echo "  2. Configuração de conexão incorreta no .env"
+        echo "  3. Erro de permissões no banco de dados"
+        echo ""
+        echo "Soluções:"
+        echo "  - Verifique se os containers estão rodando:"
+        echo "    docker ps"
+        echo "  - Inicie os serviços se necessário:"
         echo "    docker-compose up -d"
+        echo "  - Verifique a configuração DATABASE_URL no .env"
+        echo ""
         exit 1
     fi
     echo "✓ Banco de dados inicializado"

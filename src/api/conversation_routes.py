@@ -2,35 +2,13 @@
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from jose import jwt
 from src.database import get_db
-from src.auth import SECRET_KEY, ALGORITHM
 from src.hybrid_conversation_service import HybridConversationService
 from src.api.schemas import ConversationHistory, SessionInfo, MessageCreate, Message
+from src.api.dependencies import get_current_user_id
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
-security = HTTPBearer()
-
-
-def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> int:
-    """Get current user ID from token."""
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
-            )
-        return user_id
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
 
 
 @router.get("/sessions", response_model=List[str])

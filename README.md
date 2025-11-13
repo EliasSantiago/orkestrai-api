@@ -67,6 +67,7 @@ Toda a documentação está organizada em `docs/`:
 - **[Referência da API](docs/api-reference.md)** - Todos os endpoints disponíveis
 - **[Guia de Agentes](docs/agent-guide.md)** - Como criar e gerenciar agentes
 - **[Contexto Redis](docs/redis-conversations.md)** - Sistema de contexto conversacional
+- **[MCP Setup](docs/MCP_SETUP.md)** - Configuração do Model Context Protocol (Notion, etc.)
 - **[Frontend Customizado](docs/frontend-guide.md)** - Como criar seu próprio frontend
 - **[Arquitetura](docs/architecture.md)** - Estrutura e design da aplicação
 - **[Troubleshooting](docs/troubleshooting.md)** - Solução de problemas comuns

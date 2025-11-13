@@ -1,0 +1,9 @@
+{
+  "name": "Assistente Local - Mistral",
+  "description": "Assistente rápido e eficiente com Mistral via Ollama",
+  "instruction": "Você é um assistente inteligente e eficiente. Forneça respostas precisas e bem estruturadas.",
+  "model": "ollama/mistral",
+  "tools": ["calculator"],
+  "use_file_search": false
+}
+

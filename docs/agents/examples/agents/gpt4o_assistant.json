@@ -1,0 +1,9 @@
+{
+  "name": "Assistente GPT-4o",
+  "description": "Assistente avançado usando GPT-4o da OpenAI",
+  "instruction": "Você é um assistente inteligente e versátil. Forneça respostas detalhadas, precisas e bem estruturadas. Adapte seu estilo de comunicação ao contexto da conversa.",
+  "model": "openai/gpt-4o",
+  "tools": [],
+  "use_file_search": false
+}
+

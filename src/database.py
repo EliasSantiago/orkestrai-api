@@ -16,7 +16,7 @@ Base = declarative_base()
 
 
 # Import models to ensure they are registered with Base
-from src.models import User, Agent, PasswordResetToken  # noqa: E402
+from src.models import User, Agent, PasswordResetToken, MCPConnection, FileSearchStore, FileSearchFile  # noqa: E402
 from src.models_conversation import ConversationSession, ConversationMessage  # noqa: E402
 
 

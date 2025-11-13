@@ -1,0 +1,131 @@
+# LiteLLM Configuration
+# This file defines the model routing and configuration for LiteLLM proxy
+# Documentation: https://docs.litellm.ai/docs/
+
+model_list:
+  # Google Gemini Models (via Vertex AI or direct API)
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-2.0-flash-exp
+    litellm_params:
+      model: gemini/gemini-2.0-flash-exp
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-2.0-flash-thinking-exp
+    litellm_params:
+      model: gemini/gemini-2.0-flash-thinking-exp
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-1.5-flash
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-1.5-flash-8b
+    litellm_params:
+      model: gemini/gemini-1.5-flash-8b
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  # OpenAI Models
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+  
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+  
+  - model_name: gpt-4-turbo
+    litellm_params:
+      model: openai/gpt-4-turbo
+      api_key: os.environ/OPENAI_API_KEY
+  
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: openai/gpt-3.5-turbo
+      api_key: os.environ/OPENAI_API_KEY
+  
+  # Ollama Models (local)
+  # Note: Requires Ollama to be running locally
+  # Start Ollama: ollama serve
+  - model_name: ollama/llama2
+    litellm_params:
+      model: ollama/llama2
+      api_base: os.environ/OLLAMA_API_BASE_URL  # Default: http://localhost:11434
+  
+  - model_name: ollama/llama3
+    litellm_params:
+      model: ollama/llama3
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/mistral
+    litellm_params:
+      model: ollama/mistral
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/codellama
+    litellm_params:
+      model: ollama/codellama
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/gemma
+    litellm_params:
+      model: ollama/gemma
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/phi
+    litellm_params:
+      model: ollama/phi
+      api_base: os.environ/OLLAMA_API_BASE_URL
+
+# General Settings
+general_settings:
+  # Enable detailed debug logging
+  # Set to true for troubleshooting
+  set_verbose: false
+  
+  # Callback settings for logging and monitoring
+  # success_callback: ["langfuse", "lunary"]  # Optional: Add observability tools
+  
+  # Rate limiting (optional)
+  # max_parallel_requests: 10
+  
+  # Timeout settings
+  request_timeout: 600  # 10 minutes
+  
+  # Retry settings
+  num_retries: 3
+  
+  # Cache settings (optional)
+  # cache: true
+  # cache_params:
+  #   type: "redis"
+  #   host: "localhost"
+  #   port: 6379
+
+# Router settings for load balancing and fallbacks (optional)
+# router_settings:
+#   routing_strategy: "simple-shuffle"  # Options: simple-shuffle, least-busy, usage-based
+#   model_group_alias:
+#     gpt-4:
+#       - gpt-4o
+#       - gpt-4-turbo
+#     gemini:
+#       - gemini-2.0-flash-exp
+#       - gemini-1.5-pro
+
+# Environment variables required:
+# - GOOGLE_API_KEY: For Gemini models
+# - OPENAI_API_KEY: For OpenAI models
+# - OLLAMA_API_BASE_URL: For Ollama models (default: http://localhost:11434)
+

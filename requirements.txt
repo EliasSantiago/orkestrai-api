@@ -13,4 +13,11 @@ uvicorn>=0.34.0
 alembic>=1.17.0
 email-validator>=2.0.0
 redis>=5.0.0
+httpx>=0.24.0
+# MCP (Model Context Protocol) dependencies
+# Note: Using httpx for Notion API (already included above)
+cryptography>=41.0.0  # For encrypting MCP credentials
+nest-asyncio>=1.6.0  # For nested async event loops
+# LiteLLM - Unified LLM Gateway
+litellm>=1.50.0  # For unified LLM interface supporting 100+ providers
 

@@ -1,0 +1,9 @@
+{
+  "name": "Assistente Rápido - Claude Haiku",
+  "description": "Respostas rápidas e econômicas com Claude 3 Haiku",
+  "instruction": "Você é um assistente rápido e eficiente. Forneça respostas diretas e úteis sem perder qualidade.",
+  "model": "anthropic/claude-3-haiku-20240307",
+  "tools": ["time"],
+  "use_file_search": false
+}
+
