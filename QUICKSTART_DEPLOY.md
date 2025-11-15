@@ -107,6 +107,10 @@ cat ~/.ssh/gcp_deploy_key.pub | ssh seu_usuario@IP_DA_MAQUINA "cat >> ~/.ssh/aut
 # Valor: 22
 ```
 
+**❓ Não sabe como obter esses valores?**
+- **Guia Rápido:** [`GUIA_RAPIDO_SECRETS.md`](GUIA_RAPIDO_SECRETS.md)
+- **Guia Completo:** [`docs/COMO_OBTER_SECRETS.md`](docs/COMO_OBTER_SECRETS.md)
+
 ## ✅ Testar Deploy
 
 ### Opção A: Deploy Manual (Teste Primeiro)

@@ -28,6 +28,10 @@ Configurar em: **Settings → Secrets and variables → Actions**
 - [ ] `GCP_SSH_KEY` - Chave privada SSH
 - [ ] `GCP_SSH_PORT` - Porta SSH (opcional, padrão 22)
 
+**📖 Não sabe como obter esses valores?**
+- **Guia Rápido:** `GUIA_RAPIDO_SECRETS.md` (5 min)
+- **Guia Detalhado:** `docs/COMO_OBTER_SECRETS.md` (completo)
+
 ### Arquivo .env no Servidor
 
 Na máquina E2 (`~/orkestrai-api/.env`):
