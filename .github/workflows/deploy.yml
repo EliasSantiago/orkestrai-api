@@ -51,7 +51,7 @@ jobs:
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
-          source: "app-image.tar.gz,docker-compose.yml,.env.example"
+          source: "app-image.tar.gz,docker-compose.prod.yml,env.template"
           target: "/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
           strip_components: 0
 
@@ -74,21 +74,21 @@ jobs:
             # Verificar se .env existe, senão criar do template
             if [ ! -f .env ]; then
               echo "Creating .env from template..."
-              cp .env.example .env
+              cp env.template .env
               echo "⚠️ WARNING: Please configure .env file with your settings!"
             fi
             
             # Parar containers antigos
             echo "Stopping old containers..."
-            docker-compose down || true
+            docker compose -f docker-compose.prod.yml down || true
             
             # Iniciar serviços (PostgreSQL e Redis)
             echo "Starting infrastructure services..."
-            docker-compose up -d postgres redis
+            docker compose -f docker-compose.prod.yml up -d postgres redis
             
             # Aguardar PostgreSQL estar pronto
             echo "Waiting for PostgreSQL to be ready..."
-            timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U ${POSTGRES_USER:-agentuser} > /dev/null 2>&1; do sleep 2; done' || echo "Warning: PostgreSQL health check timeout"
+            timeout 60 bash -c 'until docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U ${POSTGRES_USER:-agentuser} > /dev/null 2>&1; do sleep 2; done' || echo "Warning: PostgreSQL health check timeout"
             
             # Verificar e criar tabelas apenas se necessário (primeira vez)
             echo "Checking database tables..."
@@ -96,36 +96,11 @@ jobs:
               --network agents_network \
               --env-file .env \
               ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} \
-              python3 -c "
-from src.database import engine, test_connection, Base
-from sqlalchemy import inspect
-
-if test_connection():
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    if len(tables) == 0:
-        print('→ Primeira vez: criando tabelas...')
-        Base.metadata.create_all(bind=engine)
-        print('✓ Tabelas criadas')
-    else:
-        print(f'✓ Banco já tem {len(tables)} tabelas')
-else:
-    print('⚠️ PostgreSQL não está pronto')
-" || echo "⚠️ Database check warning (continuing...)"
+              python3 -c 'from src.database import engine, test_connection, Base; from sqlalchemy import inspect; inspector = inspect(engine) if test_connection() else None; tables = inspector.get_table_names() if inspector else []; print("→ Primeira vez: criando tabelas...") if len(tables) == 0 else print(f"✓ Banco já tem {len(tables)} tabelas"); Base.metadata.create_all(bind=engine) if len(tables) == 0 else None; print("✓ Tabelas criadas") if len(tables) == 0 else None' || echo "⚠️ Database check warning (continuing...)"
             
-            # Parar aplicação antiga se estiver rodando
-            docker stop orkestrai-api || true
-            docker rm orkestrai-api || true
-            
-            # Iniciar nova aplicação
-            echo "Starting application..."
-            docker run -d \
-              --name orkestrai-api \
-              --network agents_network \
-              --restart unless-stopped \
-              -p 8001:8001 \
-              --env-file .env \
-              ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+            # Iniciar aplicação com docker compose
+            echo "Starting application with docker compose..."
+            docker compose -f docker-compose.prod.yml up -d api
             
             # Limpar imagens antigas
             echo "Cleaning up old images..."
