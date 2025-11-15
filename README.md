@@ -1,173 +1,297 @@
-# Agents ADK API - Sistema Completo de Agentes de IA
+# Orkestrai API
 
-Aplicação completa para criar e gerenciar agentes de IA utilizando o Google ADK, com suporte para context management via Redis, API REST completa e interface web customizável.
+API completa para gerenciamento de agentes de IA com suporte a múltiplos LLMs (Google Gemini, OpenAI), context management via Redis e autenticação JWT.
 
-## 🚀 Características Principais
+## 🚀 Quick Start com Docker
 
-- **Google ADK**: Framework para desenvolvimento de agentes de IA
-- **Multi-LLM**: Suporte para Google Gemini e OpenAI
-- **API REST Completa**: Gerenciamento de usuários, agentes e conversas
-- **Context Management**: Sistema de contexto conversacional com Redis
-- **Autenticação JWT**: Sistema seguro de registro e login
-- **PostgreSQL + Redis**: Persistência de dados e contexto
-- **Frontend Customizável**: API REST permite criar seu próprio frontend
+### Pré-requisitos
 
-## 📋 Pré-requisitos
-
-- Python 3.9 ou superior
 - Docker e Docker Compose
-- API Keys:
-  - Google Gemini API Key
-  - OpenAI API Key
+- Python 3.11+
+- API Keys: Google Gemini e OpenAI
 
-## 🛠️ Instalação Rápida
-
-```bash
-# 1. Setup inicial
-./scripts/setup.sh
-
-# 2. Configure .env com suas API keys
-cp .env.example .env
-# Edite .env e adicione GOOGLE_API_KEY e OPENAI_API_KEY
-
-# 3. Inicie serviços (PostgreSQL e Redis)
-./scripts/start_services.sh
-
-# 4. Inicialize banco de dados
-./scripts/init_database.sh
-```
-
-## 🎯 Iniciar Aplicação
-
-### Opção 1: API REST + ADK Web (Recomendado)
+### Iniciar Aplicação
 
 ```bash
-# Terminal 1: Iniciar API REST
-./scripts/start_api.sh
-# API em: http://localhost:8001
-# Docs em: http://localhost:8001/docs
+# 1. Clonar repositório
+git clone https://github.com/EliasSantiago/orkestrai-api.git
+cd orkestrai-api
 
-# Terminal 2: Iniciar ADK Web
-./scripts/start_adk_web.sh
-# Web UI em: http://localhost:8000
+# 2. Configurar variáveis de ambiente
+cp env.template .env
+# Edite .env com suas API keys
+
+# 3. Iniciar serviços
+docker-compose up -d
+
+# 4. Acessar API
+# Docs: http://localhost:8001/docs
+# API: http://localhost:8001
 ```
 
-### Opção 2: Apenas API REST (para frontend customizado)
+## 📦 Estrutura Docker
+
+### Serviços
+
+- **PostgreSQL 16**: Persistência de dados
+- **Redis 7**: Cache e gerenciamento de contexto
+- **API FastAPI**: Aplicação principal (porta 8001)
+
+### Arquivos Docker
+
+```
+├── Dockerfile              # Imagem da aplicação
+├── docker-compose.yml      # Desenvolvimento local
+├── docker-compose.prod.yml # Produção
+├── docker-entrypoint.sh    # Entrypoint com migrations
+└── .dockerignore          # Exclusões de build
+```
+
+### Migrações Automáticas
+
+As tabelas do banco são **criadas automaticamente** no primeiro deploy:
 
 ```bash
-./scripts/start_api.sh
-# Use a API para chat: POST /api/agents/chat
+# Migrations rodam automaticamente:
+# 1. Durante o deploy (GitHub Actions)
+# 2. Na inicialização do container
+# 3. No docker-compose up
+
+# Você não precisa criar tabelas manualmente! ✅
 ```
 
-## 📚 Documentação
+Ver: `docs/DATABASE_MIGRATIONS.md`
 
-Toda a documentação está organizada em `docs/`:
+## ⚙️ Configuração
 
-- **[Guia de Início](docs/getting-started.md)** - Setup completo e instalação
-- **[Referência da API](docs/api-reference.md)** - Todos os endpoints disponíveis
-- **[Guia de Agentes](docs/agent-guide.md)** - Como criar e gerenciar agentes
-- **[Contexto Redis](docs/redis-conversations.md)** - Sistema de contexto conversacional
-- **[MCP Setup](docs/MCP_SETUP.md)** - Configuração do Model Context Protocol (Notion, etc.)
-- **[Frontend Customizado](docs/frontend-guide.md)** - Como criar seu próprio frontend
-- **[Arquitetura](docs/architecture.md)** - Estrutura e design da aplicação
-- **[Troubleshooting](docs/troubleshooting.md)** - Solução de problemas comuns
-- **[Migração](docs/migration.md)** - Notas de versões e migrações
+### Variáveis de Ambiente (.env)
 
-## 🚀 Deploy em Produção
+```bash
+# Database
+POSTGRES_USER=agentuser
+POSTGRES_PASSWORD=sua_senha_forte
+POSTGRES_DB=agentsdb
+DATABASE_URL=postgresql://agentuser:senha@postgres:5432/agentsdb
 
-Deploy automático configurado com GitHub Actions para Google Cloud E2:
+# Redis
+REDIS_PASSWORD=sua_senha_forte
+REDIS_URL=redis://:senha@redis:6379/0
 
-- **[📖 Guia Completo de Deploy](docs/DEPLOY_SETUP.md)** - Configuração passo a passo (30 min)
-- **[⚡ Início Rápido](QUICKSTART_DEPLOY.md)** - Deploy em 10 minutos
-- **[📘 Overview do Deploy](DEPLOY_README.md)** - Visão geral e comandos úteis
-- **[❓ FAQ - Deploy](docs/FAQ_DEPLOY.md)** - Perguntas frequentes e troubleshooting
+# API
+SECRET_KEY=sua_chave_secreta_32_caracteres
+GOOGLE_API_KEY=sua_chave_google
+OPENAI_API_KEY=sua_chave_openai
+
+# Environment
+DEBUG=False
+ENVIRONMENT=production
+```
+
+Ver template completo em `env.template`
+
+## 🔧 Comandos Docker Úteis
+
+```bash
+# Iniciar serviços
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+docker logs orkestrai-api
+
+# Parar serviços
+docker-compose down
+
+# Rebuild após mudanças
+docker-compose up -d --build
+
+# Acessar banco
+docker exec -it agents_postgres psql -U agentuser -d agentsdb
+
+# Backup banco
+docker exec agents_postgres pg_dump -U agentuser agentsdb > backup.sql
+```
+
+## 🚀 Deploy em Produção (Google Cloud E2)
 
 ### Deploy Automático com GitHub Actions
 
-```bash
-# 1. Configure secrets no GitHub (GCP_HOST, GCP_USERNAME, GCP_SSH_KEY)
-# 2. Configure .env na máquina E2
-# 3. Faça push para main
-git push origin main
+**Configurar Secrets no GitHub:**
 
-# Deploy acontece automaticamente! 🎉
+```
+Settings → Secrets and variables → Actions:
+- GCP_HOST: IP da máquina E2
+- GCP_USERNAME: Usuário SSH
+- GCP_SSH_KEY: Chave privada SSH
 ```
 
-### Scripts de Gerenciamento
+**Deploy:**
 
 ```bash
-# Setup inicial do servidor E2
-./scripts/setup_gcp_server.sh
+# Opção 1: Push direto na main
+git push origin main
 
-# Deploy manual
-./scripts/deploy_manual.sh
+# Opção 2: Via Pull Request (recomendado)
+# 1. Criar branch: git checkout -b feature/nova-funcionalidade
+# 2. Fazer commit e push da branch
+# 3. Abrir Pull Request no GitHub
+# 4. Merge do PR → Deploy automático!
+```
 
-# Verificar status
+Ver guia completo: `docs/DEPLOY_COM_PR.md`
+
+### Setup Manual do Servidor
+
+```bash
+# 1. Instalar Docker no servidor E2
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+
+# 2. Criar .env no servidor
+mkdir -p ~/orkestrai-api
+cd ~/orkestrai-api
+nano .env  # Configure variáveis
+
+# 3. Clonar e iniciar
+git clone https://github.com/EliasSantiago/orkestrai-api.git .
+docker-compose up -d
+```
+
+Ver documentação completa: `docs/DEPLOY_SETUP.md`
+
+## 📚 API Endpoints
+
+### Autenticação
+
+```bash
+# Registrar usuário
+POST /api/auth/register
+
+# Login
+POST /api/auth/login
+
+# Obter token
+POST /api/auth/token
+```
+
+### Agentes
+
+```bash
+# Criar agente
+POST /api/agents
+
+# Listar agentes
+GET /api/agents
+
+# Chat com agente
+POST /api/agents/chat
+
+# Detalhes do agente
+GET /api/agents/{agent_id}
+```
+
+### Conversas
+
+```bash
+# Histórico
+GET /api/conversations/{agent_id}
+
+# Limpar contexto
+DELETE /api/conversations/{agent_id}
+```
+
+Documentação completa: http://localhost:8001/docs
+
+## 🏗️ Arquitetura
+
+```
+orkestrai-api/
+├── src/
+│   ├── api/              # Endpoints FastAPI
+│   ├── core/             # LLM providers e factories
+│   ├── domain/           # Entities e business logic
+│   ├── infrastructure/   # Banco, cache, external services
+│   └── services/         # Application services
+├── tools/                # Ferramentas para agentes
+├── scripts/              # Scripts de deploy e utilitários
+├── migrations/           # Migrações SQL
+└── docs/                 # Documentação detalhada
+```
+
+## 🔒 Segurança
+
+- Autenticação JWT com senhas hasheadas (bcrypt)
+- Validação de entrada com Pydantic
+- Rate limiting configurável
+- Secrets nunca commitados (`.gitignore`)
+- HTTPS recomendado em produção
+
+## 📊 Monitoramento
+
+```bash
+# Status dos serviços
 ./scripts/check_server_status.sh
 
-# Backup do banco
+# Backup automático
 ./scripts/backup_db.sh
 
-# Configurar HTTPS
-sudo ./scripts/setup_https.sh
-
-# Rollback
-./scripts/rollback.sh
-
-# Monitorar logs
+# Ver logs
 ./scripts/monitor_logs.sh
 ```
 
-## 🎯 Fluxo Básico de Uso
+## 🛠️ Desenvolvimento
 
-1. **Registrar/Login**: `POST /api/auth/register` ou `/api/auth/login`
-2. **Criar Agente**: `POST /api/agents`
-3. **Chat com Agente**: `POST /api/agents/chat`
-4. **Gerenciar Contexto**: Endpoints em `/api/conversations`
+```bash
+# Instalar dependências
+pip install -r requirements.txt
 
-## 🔧 Portas Padrão
+# Ativar ambiente virtual
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
 
-- **API REST**: `8001` - http://localhost:8001
-- **ADK Web**: `8000` - http://localhost:8000
-- **PostgreSQL**: `5432`
-- **Redis**: `6379`
-
-## 📖 Documentação Interativa
-
-Acesse `http://localhost:8001/docs` para ver a documentação completa da API com exemplos interativos (Swagger UI).
-
-## 🏗️ Estrutura do Projeto
-
-```
-.
-├── docs/               # Documentação organizada
-├── scripts/            # Scripts de inicialização
-├── src/                # Código fonte
-│   ├── api/           # Endpoints REST
-│   ├── services/      # Serviços de negócio
-│   └── ...
-├── tools/              # Ferramentas para agentes
-└── docker-compose.yml  # PostgreSQL e Redis
+# Iniciar em modo dev
+uvicorn src.api.main:app --reload --port 8001
 ```
 
-## 📝 Scripts Disponíveis
+## 🧪 Testes
 
-Todos os scripts estão em `scripts/`:
+```bash
+# Executar testes
+pytest
 
-- `setup.sh` - Instalação inicial
-- `start_services.sh` - Iniciar PostgreSQL e Redis
-- `start_api.sh` - Iniciar API REST (porta 8001)
-- `start_adk_web.sh` - Iniciar ADK Web (porta 8000)
-- `init_database.sh` - Inicializar banco de dados
-- `migrate_database.sh` - Migrações do banco
+# Com coverage
+pytest --cov=src tests/
+```
 
-## 🚀 Próximos Passos
+## 📖 Documentação Adicional
 
-1. Leia o [Guia de Início](docs/getting-started.md)
-2. Crie seu primeiro agente com o [Guia de Agentes](docs/agent-guide.md)
-3. Explore a [Referência da API](docs/api-reference.md)
-4. Configure [Contexto Redis](docs/redis-conversations.md) para conversas persistentes
+- **[Deploy Completo](docs/DEPLOY_SETUP.md)** - Setup em Google Cloud E2
+- **[Obter Secrets](docs/COMO_OBTER_SECRETS.md)** - Como configurar SSH e secrets
+- **[Deploy com PR](docs/DEPLOY_COM_PR.md)** - Deploy via Pull Request
+- **[Database Migrations](docs/DATABASE_MIGRATIONS.md)** - Sistema de migrações
+- **[FAQ](docs/FAQ_DEPLOY.md)** - Perguntas frequentes e troubleshooting
+- **[API Reference](docs/api-reference.md)** - Documentação completa da API
+- **[MCP Setup](docs/MCP_SETUP.md)** - Model Context Protocol
 
-## 📄 Licença
+## 🤝 Contribuindo
 
-Este projeto utiliza o Google ADK e está sujeito às licenças dos respectivos componentes.
+1. Fork o projeto
+2. Crie uma branch: `git checkout -b feature/nova-feature`
+3. Commit: `git commit -m 'Add nova feature'`
+4. Push: `git push origin feature/nova-feature`
+5. Abra um Pull Request
+
+## 📝 Licença
+
+Este projeto está sob a licença especificada no arquivo LICENSE.
+
+## 🆘 Suporte
+
+- Issues: https://github.com/EliasSantiago/orkestrai-api/issues
+- Documentação: `/docs`
+- API Docs: http://localhost:8001/docs
+
+---
+
+**Stack:** Python 3.11 • FastAPI • PostgreSQL 16 • Redis 7 • Docker • Google Gemini • OpenAI

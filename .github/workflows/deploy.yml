@@ -5,6 +5,11 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
   workflow_dispatch:  # Permite trigger manual
 
 env:
@@ -14,8 +19,20 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # Só executa se for push direto OU se for PR merged
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     
     steps:
+      - name: Display deployment info
+        run: |
+          echo "🚀 Deploy triggered by: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "📋 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo "✅ PR merged by: ${{ github.event.pull_request.merged_by.login }}"
+          fi
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "👤 Actor: ${{ github.actor }}"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -73,14 +90,28 @@ jobs:
             echo "Waiting for PostgreSQL to be ready..."
             timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U ${POSTGRES_USER:-agentuser} > /dev/null 2>&1; do sleep 2; done' || echo "Warning: PostgreSQL health check timeout"
             
-            # Executar migrações (se necessário)
-            echo "Running database migrations..."
+            # Verificar e criar tabelas apenas se necessário (primeira vez)
+            echo "Checking database tables..."
             docker run --rm \
               --network agents_network \
-              -e DATABASE_URL="${DATABASE_URL}" \
-              -v $(pwd)/migrations:/app/migrations \
+              --env-file .env \
               ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} \
-              python -c "from src.init_db import init_database; init_database()" || echo "Migration skipped or failed"
+              python3 -c "
+from src.database import engine, test_connection, Base
+from sqlalchemy import inspect
+
+if test_connection():
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    if len(tables) == 0:
+        print('→ Primeira vez: criando tabelas...')
+        Base.metadata.create_all(bind=engine)
+        print('✓ Tabelas criadas')
+    else:
+        print(f'✓ Banco já tem {len(tables)} tabelas')
+else:
+    print('⚠️ PostgreSQL não está pronto')
+" || echo "⚠️ Database check warning (continuing...)"
             
             # Parar aplicação antiga se estiver rodando
             docker stop orkestrai-api || true
@@ -94,7 +125,6 @@ jobs:
               --restart unless-stopped \
               -p 8001:8001 \
               --env-file .env \
-              -v $(pwd)/src:/app/src \
               ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
             
             # Limpar imagens antigas

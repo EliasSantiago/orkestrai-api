@@ -1,0 +1,109 @@
+╔═══════════════════════════════════════════════════════════════╗
+║   ✅ SISTEMA DE MIGRAÇÕES AUTOMÁTICAS CONFIGURADO            ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📋 O QUE FOI IMPLEMENTADO:
+
+1. ✅ Script de Migração Automática
+   └─ scripts/migrate_database.sh
+   └─ Cria tabelas via SQLAlchemy ORM
+   └─ Aplica migrations SQL
+   └─ Controle de versão (evita duplicatas)
+
+2. ✅ Docker Entrypoint
+   └─ docker-entrypoint.sh
+   └─ Roda migrations antes de iniciar API
+   └─ Configurável via RUN_MIGRATIONS=true
+
+3. ✅ Workflow de Deploy Atualizado
+   └─ .github/workflows/deploy.yml
+   └─ Executa migrations automaticamente
+   └─ Antes de iniciar aplicação
+
+4. ✅ Dockerfile Atualizado
+   └─ Inclui entrypoint
+   └─ Configura migrations automáticas
+
+5. ✅ Documentação Completa
+   └─ docs/DATABASE_MIGRATIONS.md
+   └─ README.md atualizado
+   └─ scripts/README.md atualizado
+
+═══════════════════════════════════════════════════════════════
+
+🎯 COMO FUNCIONA:
+
+1. Push/Merge para main
+   ↓
+2. GitHub Actions faz deploy
+   ↓
+3. Migrations rodam automaticamente
+   ├─ Cria tabelas (SQLAlchemy)
+   ├─ Aplica migrations SQL
+   └─ Verifica integridade
+   ↓
+4. Aplicação inicia
+   ↓
+5. ✅ Deploy completo com banco configurado!
+
+═══════════════════════════════════════════════════════════════
+
+📊 TABELAS CRIADAS AUTOMATICAMENTE:
+
+✓ users                     - Usuários
+✓ agents                    - Agentes de IA
+✓ password_reset_tokens     - Reset de senha
+✓ mcp_connections           - Conexões MCP
+✓ file_search_stores        - Busca de arquivos
+✓ file_search_files         - Arquivos indexados
+✓ conversation_sessions     - Sessões de conversa
+✓ conversation_messages     - Mensagens
+✓ schema_migrations         - Controle de migrations
+
+═══════════════════════════════════════════════════════════════
+
+🔄 MIGRATIONS SQL ADICIONAIS:
+
+Se houver arquivos .sql em migrations/:
+✓ Aplicados automaticamente após tabelas criadas
+✓ Registrados em schema_migrations
+✓ Nunca reaplicados (controle de versão)
+
+Exemplo: migrations/add_new_column.sql
+└─ Aplicado automaticamente no próximo deploy
+
+═══════════════════════════════════════════════════════════════
+
+🛠️ COMANDOS ÚTEIS:
+
+# Rodar migrations manualmente
+./scripts/migrate_database.sh
+
+# Ver status das tabelas
+docker exec -it agents_postgres psql -U agentuser -d agentsdb
+\dt
+
+# Ver migrations aplicadas
+SELECT * FROM schema_migrations;
+
+# Deploy com migrations
+./scripts/deploy_manual.sh
+
+═══════════════════════════════════════════════════════════════
+
+✨ VOCÊ NÃO PRECISA:
+
+❌ Criar tabelas manualmente
+❌ Rodar migrations manualmente
+❌ Executar init_db.py
+❌ Aplicar SQL manualmente
+
+TUDO É AUTOMÁTICO! 🎉
+
+═══════════════════════════════════════════════════════════════
+
+📖 DOCUMENTAÇÃO:
+
+Ver: docs/DATABASE_MIGRATIONS.md
+
+═══════════════════════════════════════════════════════════════

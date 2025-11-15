@@ -27,18 +27,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar dependências Python do builder
-COPY --from=builder /root/.local /root/.local
+# Copiar dependências Python do builder para local do appuser
+COPY --from=builder /root/.local /home/appuser/.local
 
 # Adicionar PATH para binários do usuário
-ENV PATH=/root/.local/bin:$PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Copiar código da aplicação
 COPY . .
 
-# Criar usuário não-root para executar a aplicação
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Criar usuário não-root primeiro
+RUN useradd -m -u 1000 appuser
+
+# Copiar entrypoint e dar permissão (fazer como root)
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Ajustar permissões
+RUN chown -R appuser:appuser /app /home/appuser/.local
 
 # Mudar para usuário não-root
 USER appuser
@@ -50,6 +56,7 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8001/docs || exit 1
 
-# Comando para iniciar a aplicação
+# Configurar entrypoint e comando
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "4"]
 
