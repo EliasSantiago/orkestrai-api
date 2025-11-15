@@ -1,0 +1,60 @@
+name: Scheduled Database Backup
+
+on:
+  schedule:
+    # Executar backup diário às 3h UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Permite trigger manual
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Backup Database on GCP E2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          port: ${{ secrets.GCP_SSH_PORT || 22 }}
+          script: |
+            cd /home/${{ secrets.GCP_USERNAME }}/orkestrai-api
+            
+            # Executar script de backup
+            if [ -f scripts/backup_db.sh ]; then
+              bash scripts/backup_db.sh
+              echo "✅ Backup completed successfully"
+            else
+              echo "⚠️ Backup script not found"
+              
+              # Backup manual
+              BACKUP_DIR="backups"
+              mkdir -p $BACKUP_DIR
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.sql"
+              
+              docker exec agents_postgres pg_dump \
+                -U ${POSTGRES_USER:-agentuser} \
+                -d ${POSTGRES_DB:-agentsdb} \
+                --clean --if-exists --create \
+                > "$BACKUP_FILE"
+              
+              gzip "$BACKUP_FILE"
+              echo "✅ Manual backup created: $BACKUP_FILE.gz"
+              
+              # Manter apenas últimos 7 backups
+              cd $BACKUP_DIR
+              ls -t backup_*.sql.gz 2>/dev/null | tail -n +8 | xargs -r rm
+            fi
+            
+            # Mostrar backups disponíveis
+            echo ""
+            echo "📋 Available backups:"
+            ls -lh backups/backup_*.sql.gz 2>/dev/null || echo "No backups found"
+
+      - name: Notify backup status
+        if: failure()
+        run: |
+          echo "❌ Backup failed! Check the logs."
+

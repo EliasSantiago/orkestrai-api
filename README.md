@@ -73,6 +73,51 @@ Toda a documentação está organizada em `docs/`:
 - **[Troubleshooting](docs/troubleshooting.md)** - Solução de problemas comuns
 - **[Migração](docs/migration.md)** - Notas de versões e migrações
 
+## 🚀 Deploy em Produção
+
+Deploy automático configurado com GitHub Actions para Google Cloud E2:
+
+- **[📖 Guia Completo de Deploy](docs/DEPLOY_SETUP.md)** - Configuração passo a passo (30 min)
+- **[⚡ Início Rápido](QUICKSTART_DEPLOY.md)** - Deploy em 10 minutos
+- **[📘 Overview do Deploy](DEPLOY_README.md)** - Visão geral e comandos úteis
+- **[❓ FAQ - Deploy](docs/FAQ_DEPLOY.md)** - Perguntas frequentes e troubleshooting
+
+### Deploy Automático com GitHub Actions
+
+```bash
+# 1. Configure secrets no GitHub (GCP_HOST, GCP_USERNAME, GCP_SSH_KEY)
+# 2. Configure .env na máquina E2
+# 3. Faça push para main
+git push origin main
+
+# Deploy acontece automaticamente! 🎉
+```
+
+### Scripts de Gerenciamento
+
+```bash
+# Setup inicial do servidor E2
+./scripts/setup_gcp_server.sh
+
+# Deploy manual
+./scripts/deploy_manual.sh
+
+# Verificar status
+./scripts/check_server_status.sh
+
+# Backup do banco
+./scripts/backup_db.sh
+
+# Configurar HTTPS
+sudo ./scripts/setup_https.sh
+
+# Rollback
+./scripts/rollback.sh
+
+# Monitorar logs
+./scripts/monitor_logs.sh
+```
+
 ## 🎯 Fluxo Básico de Uso
 
 1. **Registrar/Login**: `POST /api/auth/register` ou `/api/auth/login`
