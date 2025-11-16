@@ -51,7 +51,7 @@ jobs:
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
-          source: "app-image.tar.gz,docker-compose.prod.yml,env.template"
+          source: "app-image.tar.gz,docker-compose.prod.yml,env.template,scripts/migrate_database.sh,migrations/"
           target: "/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
           strip_components: 0
 
@@ -90,13 +90,15 @@ jobs:
             echo "Waiting for PostgreSQL to be ready..."
             timeout 60 bash -c 'until docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U ${POSTGRES_USER:-agentuser} > /dev/null 2>&1; do sleep 2; done' || echo "Warning: PostgreSQL health check timeout"
             
-            # Verificar e criar tabelas apenas se necessário (primeira vez)
-            echo "Checking database tables..."
+            # Executar migrations automáticas (cria tabelas + aplica migrations SQL)
+            echo "Running database migrations..."
             docker run --rm \
               --network agents_network \
               --env-file .env \
+              -v $(pwd)/migrations:/app/migrations:ro \
+              -v $(pwd)/scripts:/app/scripts:ro \
               ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} \
-              python3 -c 'from src.database import engine, test_connection, Base; from sqlalchemy import inspect; inspector = inspect(engine) if test_connection() else None; tables = inspector.get_table_names() if inspector else []; print("→ Primeira vez: criando tabelas...") if len(tables) == 0 else print(f"✓ Banco já tem {len(tables)} tabelas"); Base.metadata.create_all(bind=engine) if len(tables) == 0 else None; print("✓ Tabelas criadas") if len(tables) == 0 else None' || echo "⚠️ Database check warning (continuing...)"
+              bash /app/scripts/migrate_database.sh || echo "⚠️ Migration warning (continuing...)"
             
             # Iniciar aplicação com docker compose
             echo "Starting application with docker compose..."
