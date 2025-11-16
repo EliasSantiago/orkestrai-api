@@ -19,6 +19,11 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    
+    # User preferences (theme, language, layout, etc)
+    # Stored as JSON for flexibility
+    preferences = Column(JSON, nullable=True, default=dict)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
