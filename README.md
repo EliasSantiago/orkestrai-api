@@ -295,3 +295,4 @@ Este projeto está sob a licença especificada no arquivo LICENSE.
 ---
 
 **Stack:** Python 3.11 • FastAPI • PostgreSQL 16 • Redis 7 • Docker • Google Gemini • OpenAI
+# Trigger deploy
