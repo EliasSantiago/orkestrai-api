@@ -35,9 +35,58 @@ class UserResponse(BaseModel):
     name: str
     email: str
     is_active: bool
+    preferences: Optional[dict] = None
     
     class Config:
         from_attributes = True
+
+
+# User Preferences schemas
+class UserPreferences(BaseModel):
+    """User preferences (theme, language, layout, etc)."""
+    theme: Optional[str] = "auto"  # "light", "dark", "auto"
+    language: Optional[str] = "en"  # "en", "pt-BR", "es", etc
+    layout: Optional[str] = "default"  # "default", "compact", "comfortable"
+    notifications: Optional[bool] = True
+    sidebar_expanded: Optional[bool] = True
+    message_sound: Optional[bool] = False
+    font_size: Optional[str] = "medium"  # "small", "medium", "large"
+    
+    # Allow extra fields for future preferences
+    class Config:
+        extra = "allow"
+        json_schema_extra = {
+            "example": {
+                "theme": "dark",
+                "language": "pt-BR",
+                "layout": "compact",
+                "notifications": True,
+                "sidebar_expanded": False,
+                "message_sound": True,
+                "font_size": "medium"
+            }
+        }
+
+
+class UserPreferencesUpdate(BaseModel):
+    """Update user preferences (partial update allowed)."""
+    theme: Optional[str] = None
+    language: Optional[str] = None
+    layout: Optional[str] = None
+    notifications: Optional[bool] = None
+    sidebar_expanded: Optional[bool] = None
+    message_sound: Optional[bool] = None
+    font_size: Optional[str] = None
+    
+    # Allow extra fields for future preferences
+    class Config:
+        extra = "allow"
+        json_schema_extra = {
+            "example": {
+                "theme": "dark",
+                "language": "pt-BR"
+            }
+        }
 
 
 # Auth schemas
