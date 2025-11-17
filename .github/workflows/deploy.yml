@@ -92,7 +92,7 @@ jobs:
             
             # Exportar variáveis do .env para a sessão atual
             echo "Exporting environment variables..."
-            export $(grep -v '^#' .env | xargs -d '\n')
+            export $(grep -vE '^\s*#|^\s*$' .env)
             
             # Parar containers antigos
             echo "Stopping old containers..."
