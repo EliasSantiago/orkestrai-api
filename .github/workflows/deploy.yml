@@ -78,6 +78,10 @@ jobs:
               echo "⚠️ WARNING: Please configure .env file with your settings!"
             fi
             
+            # Exportar variáveis do .env para a sessão atual
+            echo "Exporting environment variables..."
+            export $(grep -v '^#' .env | xargs)
+            
             # Parar containers antigos
             echo "Stopping old containers..."
             docker compose -f docker-compose.prod.yml down || true
@@ -91,7 +95,7 @@ jobs:
             ATTEMPTS=30
             SUCCESS=false
             for i in $(seq 1 $ATTEMPTS); do
-              if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER:-agentuser}" > /dev/null 2>&1; then
+              if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
                 SUCCESS=true
                 break
               fi
