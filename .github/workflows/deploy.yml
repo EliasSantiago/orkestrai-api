@@ -167,18 +167,49 @@ jobs:
             
             # Aguardar PostgreSQL estar pronto (com timeout)
             echo "⏳ Waiting for PostgreSQL..."
+            
+            # Obter credenciais do .env com fallback para defaults
+            PG_USER="${POSTGRES_USER:-agentuser}"
+            PG_DB="${POSTGRES_DB:-agentsdb}"
+            
+            echo "🔍 Testing connection with user: $PG_USER, database: $PG_DB"
+            
             TIMEOUT=60
             ELAPSED=0
-            until docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; do
+            until docker exec agents_postgres pg_isready -U "$PG_USER" -d "$PG_DB" > /dev/null 2>&1; do
               if [ $ELAPSED -ge $TIMEOUT ]; then
                 echo "❌ PostgreSQL timeout after ${TIMEOUT}s"
+                echo "📋 PostgreSQL logs:"
+                docker logs --tail 50 agents_postgres
+                echo ""
+                echo "🔍 Container status:"
+                docker ps -a | grep postgres
                 exit 1
               fi
-              echo "  Waiting... (${ELAPSED}s/${TIMEOUT}s)"
+              echo "  Tentativa $((ELAPSED / 2 + 1))/$((TIMEOUT / 2))..."
               sleep 2
               ELAPSED=$((ELAPSED + 2))
             done
-            echo "✅ PostgreSQL is ready"
+            echo "✅ PostgreSQL is ready and accepting connections"
+            
+            # Verificar Redis
+            echo "⏳ Waiting for Redis..."
+            REDIS_TIMEOUT=30
+            REDIS_ELAPSED=0
+            REDIS_PASS="${REDIS_PASSWORD:-}"
+            
+            until docker exec agents_redis redis-cli --no-auth-warning -a "$REDIS_PASS" ping > /dev/null 2>&1; do
+              if [ $REDIS_ELAPSED -ge $REDIS_TIMEOUT ]; then
+                echo "❌ Redis timeout after ${REDIS_TIMEOUT}s"
+                echo "📋 Redis logs:"
+                docker logs --tail 50 agents_redis
+                exit 1
+              fi
+              echo "  Tentativa $((REDIS_ELAPSED / 2 + 1))/$((REDIS_TIMEOUT / 2))..."
+              sleep 2
+              REDIS_ELAPSED=$((REDIS_ELAPSED + 2))
+            done
+            echo "✅ Redis is ready and accepting connections"
             
             # Executar migrations
             echo "🔄 Running database migrations..."
