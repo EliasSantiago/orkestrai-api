@@ -99,7 +99,7 @@ jobs:
               -v $(pwd)/migrations:/app/migrations:ro \
               -v $(pwd)/scripts:/app/scripts:ro \
               ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} \
-              bash /app/scripts/migrate_database.sh || echo "⚠️ Migration warning (continuing...)"
+              bash /app/scripts/migrate_database.sh
             
             # Iniciar aplicação com docker compose
             echo "Starting application with docker compose..."
