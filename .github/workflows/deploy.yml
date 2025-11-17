@@ -4,34 +4,35 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
-    types: [closed]
     branches:
       - main
-      - master
   workflow_dispatch:  # Permite trigger manual
+
+# Previne deployments simultâneos
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
 
 env:
   DOCKER_IMAGE: orkestrai-api
-  DOCKER_TAG: latest
+  DOCKER_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    # Só executa se for push direto OU se for PR merged
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    timeout-minutes: 30
+    # Só faz deploy em push ou workflow manual (não em PRs)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Display deployment info
         run: |
           echo "🚀 Deploy triggered by: ${{ github.event_name }}"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "📋 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
-            echo "✅ PR merged by: ${{ github.event.pull_request.merged_by.login }}"
-          fi
           echo "🌿 Branch: ${{ github.ref_name }}"
           echo "👤 Actor: ${{ github.actor }}"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "💬 Message: ${{ github.event.head_commit.message }}"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,22 +40,38 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker meta
+      - name: Generate Docker tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGE }}
-          tags: ${{ env.DOCKER_TAG }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest
+            type=raw,value=prod-{{date 'YYYYMMDD-HHmmss'}}
 
       - name: Build and export Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           outputs: type=docker,dest=app-image.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Upload Docker image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ github.sha }}
+          path: app-image.tar
+          retention-days: 7
+          compression-level: 0  # Já está comprimido
 
       - name: Copy files to GCP E2 instance
         uses: appleboy/scp-action@v0.1.7
@@ -66,6 +83,7 @@ jobs:
           source: "app-image.tar,docker-compose.prod.yml,env.template,scripts/migrate_database.sh,migrations/"
           target: "/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
           strip_components: 0
+          timeout: 10m
 
       - name: Deploy on GCP E2 instance
         uses: appleboy/ssh-action@v1.0.3
@@ -74,112 +92,213 @@ jobs:
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
+          command_timeout: 20m
           script: |
-            set -e
-            cd /home/${{ secrets.GCP_USERNAME }}/orkestrai-api
+            set -euo pipefail
             
-            # Carregar nova imagem Docker
-            echo "Loading Docker image..."
-            docker load -i app-image.tar
-            rm app-image.tar
+            DEPLOY_DIR="/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
+            IMAGE_NAME="${{ env.DOCKER_IMAGE }}"
+            GIT_SHA="${{ github.sha }}"
+            SHORT_SHA="${GIT_SHA:0:7}"
             
-            # Verificar se .env existe, senão criar do template
+            cd "$DEPLOY_DIR"
+            
+            echo "================================================"
+            echo "🚀 Starting deployment - Commit: $SHORT_SHA"
+            echo "================================================"
+            
+            # Verificar se .env existe
             if [ ! -f .env ]; then
-              echo "Creating .env from template..."
+              echo "⚠️  Creating .env from template..."
               cp env.template .env
-              echo "⚠️ WARNING: Please configure .env file with your settings!"
-            fi
-            
-            # Exportar variáveis do .env para a sessão atual
-            echo "Exporting environment variables..."
-            export $(grep -vE '^\s*#|^\s*$' .env)
-            
-            # Parar containers antigos
-            echo "Stopping old containers..."
-            docker compose -f docker-compose.prod.yml down || true
-            
-            # Iniciar serviços (PostgreSQL e Redis)
-            echo "Starting infrastructure services..."
-            docker compose -f docker-compose.prod.yml up -d postgres redis
-            
-            # Aguardar PostgreSQL estar pronto
-            echo "Waiting for PostgreSQL to be ready..."
-            ATTEMPTS=30
-            SUCCESS=false
-            for i in $(seq 1 $ATTEMPTS); do
-              if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
-                SUCCESS=true
-                break
-              fi
-              echo "Attempt $i/$ATTEMPTS failed, waiting..."
-              sleep 2
-            done
-            if [ "$SUCCESS" != "true" ]; then
-              echo "❌ Timeout: PostgreSQL did not become ready in time."
+              echo "❌ ERROR: Please configure .env file with your settings!"
               exit 1
             fi
             
-            # Executar migrations automáticas (cria tabelas + aplica migrations SQL)
-            echo "Running database migrations..."
+            # Carregar variáveis de ambiente de forma segura
+            set -a
+            source .env
+            set +a
+            
+            # Salvar container atual para rollback
+            CURRENT_CONTAINER=$(docker ps -q -f name=orkestrai-api) || true
+            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null) || echo "none"
+            echo "📦 Current image: $CURRENT_IMAGE"
+            
+            # Função de rollback
+            rollback() {
+              echo "❌ Deployment failed! Starting rollback..."
+              if [ -n "$CURRENT_CONTAINER" ]; then
+                echo "🔄 Restoring previous container..."
+                docker compose -f docker-compose.prod.yml down api || true
+                docker start "$CURRENT_CONTAINER" || true
+              fi
+              exit 1
+            }
+            
+            # Configurar trap para rollback em caso de erro
+            trap rollback ERR
+            
+            # Carregar nova imagem Docker
+            echo "📥 Loading new Docker image..."
+            docker load -i app-image.tar
+            rm -f app-image.tar
+            
+            # Tag com SHA para versionamento
+            docker tag "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${SHORT_SHA}"
+            
+            # Verificar se imagem foi carregada
+            if ! docker images | grep -q "${IMAGE_NAME}"; then
+              echo "❌ Failed to load Docker image"
+              exit 1
+            fi
+            
+            # Iniciar/verificar serviços de infraestrutura
+            echo "🔧 Starting infrastructure services..."
+            docker compose -f docker-compose.prod.yml up -d postgres redis
+            
+            # Aguardar PostgreSQL estar pronto (com timeout)
+            echo "⏳ Waiting for PostgreSQL..."
+            TIMEOUT=60
+            ELAPSED=0
+            until docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; do
+              if [ $ELAPSED -ge $TIMEOUT ]; then
+                echo "❌ PostgreSQL timeout after ${TIMEOUT}s"
+                exit 1
+              fi
+              echo "  Waiting... (${ELAPSED}s/${TIMEOUT}s)"
+              sleep 2
+              ELAPSED=$((ELAPSED + 2))
+            done
+            echo "✅ PostgreSQL is ready"
+            
+            # Executar migrations
+            echo "🔄 Running database migrations..."
             docker run --rm \
               --entrypoint "" \
               --network agents_network \
               --env-file .env \
-              -v $(pwd)/migrations:/app/migrations:ro \
-              -v $(pwd)/scripts:/app/scripts:ro \
-              ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }} \
+              -v "$(pwd)/migrations:/app/migrations:ro" \
+              -v "$(pwd)/scripts:/app/scripts:ro" \
+              "${IMAGE_NAME}:latest" \
               bash /app/scripts/migrate_database.sh
             
-            # Iniciar aplicação com docker compose
-            echo "Starting application with docker compose..."
-            docker compose -f docker-compose.prod.yml up -d api
+            # Blue-Green Deployment: Iniciar novo container antes de parar o antigo
+            echo "🚀 Starting new application container..."
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api
             
-            # Limpar imagens antigas
-            echo "Cleaning up old images..."
+            # Aguardar novo container ficar saudável
+            echo "🏥 Waiting for new container health check..."
+            HEALTH_TIMEOUT=60
+            HEALTH_ELAPSED=0
+            until [ "$(docker inspect --format='{{.State.Health.Status}}' orkestrai-api 2>/dev/null)" = "healthy" ]; do
+              if [ $HEALTH_ELAPSED -ge $HEALTH_TIMEOUT ]; then
+                echo "❌ Health check timeout"
+                docker logs --tail 50 orkestrai-api
+                exit 1
+              fi
+              CONTAINER_STATUS=$(docker inspect --format='{{.State.Status}}' orkestrai-api 2>/dev/null || echo "unknown")
+              echo "  Container status: $CONTAINER_STATUS (${HEALTH_ELAPSED}s/${HEALTH_TIMEOUT}s)"
+              sleep 3
+              HEALTH_ELAPSED=$((HEALTH_ELAPSED + 3))
+            done
+            
+            # Remover trap de rollback (deployment bem sucedido)
+            trap - ERR
+            
+            # Limpar containers e imagens antigas
+            echo "🧹 Cleaning up old resources..."
             docker image prune -f
             
+            # Manter apenas últimas 3 versões
+            docker images "${IMAGE_NAME}" --format "{{.Tag}}" | grep -v "latest" | tail -n +4 | xargs -r -I {} docker rmi "${IMAGE_NAME}:{}" 2>/dev/null || true
+            
+            echo "================================================"
             echo "✅ Deployment completed successfully!"
-            echo "API running at: http://$(hostname -I | awk '{print $1}'):8001"
+            echo "📝 Deployed version: $SHORT_SHA"
+            echo "🌐 API URL: http://$(hostname -I | awk '{print $1}'):8001"
+            echo "================================================"
 
-      - name: Health check
+      - name: Verify deployment and run smoke tests
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
+          command_timeout: 5m
           script: |
-            echo "Waiting for application to start..."
-            sleep 10 # Give it a moment to initialize
+            set -euo pipefail
             
-            # Check container status for 30 seconds
-            for i in {1..15}; do
-              STATUS=$(docker inspect --format '{{.State.Health.Status}}' orkestrai-api 2>/dev/null || echo "starting")
-              if [ "$STATUS" = "healthy" ]; then
-                echo "✅ Container is healthy."
-                # Final check on the endpoint
-                curl -f http://localhost:8001/docs
-                exit 0
-              fi
-              echo "Container status: $STATUS. Waiting... ($i/15)"
-              sleep 2
-            done
+            echo "🔍 Running post-deployment verification..."
             
-            echo "❌ Health check failed after 30 seconds."
-            echo "Recent logs:"
-            docker logs --tail 50 orkestrai-api
-            # Check if container is running at all
+            # Verificar se container está rodando
             if ! docker ps | grep -q orkestrai-api; then
               echo "❌ Container is not running!"
-              docker logs orkestrai-api
+              docker logs --tail 100 orkestrai-api
               exit 1
             fi
+            
+            # Verificar status do container
+            HEALTH_STATUS=$(docker inspect --format '{{.State.Health.Status}}' orkestrai-api 2>/dev/null || echo "none")
+            echo "📊 Health status: $HEALTH_STATUS"
+            
+            if [ "$HEALTH_STATUS" != "healthy" ]; then
+              echo "❌ Container is not healthy!"
+              docker logs --tail 100 orkestrai-api
+              exit 1
+            fi
+            
+            # Smoke tests - testar endpoints principais
+            echo "🧪 Running smoke tests..."
+            
+            # Test 1: Health endpoint
+            if curl -f -s http://localhost:8001/health > /dev/null 2>&1; then
+              echo "✅ Health endpoint OK"
+            else
+              echo "⚠️  Health endpoint check failed"
+            fi
+            
+            # Test 2: Docs endpoint
+            if curl -f -s http://localhost:8001/docs > /dev/null 2>&1; then
+              echo "✅ Docs endpoint OK"
+            else
+              echo "⚠️  Docs endpoint check failed"
+            fi
+            
+            # Mostrar estatísticas do container
+            echo ""
+            echo "📈 Container stats:"
+            docker stats orkestrai-api --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+            
+            # Mostrar últimas linhas de log
+            echo ""
+            echo "📋 Recent logs:"
+            docker logs --tail 20 orkestrai-api
+            
+            echo ""
+            echo "✅ All verification checks passed!"
 
       - name: Notify deployment status
         if: always()
         run: |
           if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ Deployment successful!"
+            echo "================================================"
+            echo "✅ DEPLOYMENT SUCCESSFUL!"
+            echo "================================================"
+            echo "📝 Commit: ${{ github.sha }}"
+            echo "👤 Deployed by: ${{ github.actor }}"
+            echo "⏰ Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "================================================"
           else
-            echo "❌ Deployment failed!"
+            echo "================================================"
+            echo "❌ DEPLOYMENT FAILED!"
+            echo "================================================"
+            echo "📝 Commit: ${{ github.sha }}"
+            echo "👤 Attempted by: ${{ github.actor }}"
+            echo "⏰ Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "================================================"
+            echo ""
+            echo "⚠️  Please check the logs above for details."
+            echo "💡 The previous version should still be running (rollback executed)."
           fi
