@@ -80,7 +80,9 @@ jobs:
             
             # Exportar variáveis do .env para a sessão atual
             echo "Exporting environment variables..."
-            export $(grep -v '^#' .env | xargs)
+            set -a # Automatically export all variables
+            source .env
+            set +a # Stop automatically exporting
             
             # Parar containers antigos
             echo "Stopping old containers..."
