@@ -116,8 +116,16 @@ jobs:
             fi
             
             # Carregar variáveis de ambiente de forma segura
+            # Filtra comentários, linhas vazias e exporta apenas variáveis válidas
             set -a
-            source .env
+            while IFS= read -r line || [ -n "$line" ]; do
+              # Ignora linhas vazias e comentários
+              [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+              # Ignora linhas que não são variáveis (formato VAR=valor)
+              [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)[[:space:]]*$ ]] || continue
+              # Exporta a variável
+              export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+            done < .env
             set +a
             
             # Salvar container atual para rollback
