@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, JSON, Index
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from src.database import Base
 
@@ -19,6 +20,7 @@ class ConversationSession(Base):
     last_activity = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     message_count = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+    session_metadata = Column(JSONB, nullable=True, default={})  # Metadata: title, description, avatar, pinned, etc.
     
     # Relationship with user
     user = relationship("User", backref="conversation_sessions")

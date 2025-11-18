@@ -200,15 +200,32 @@ class HybridConversationService:
                 
                 messages = query.all()
                 
-                # Convert to dict format
+                # Convert to dict format with full message details
                 history = []
                 for msg in messages:
-                    history.append({
+                    created_at_ms = int(msg.created_at.timestamp() * 1000) if msg.created_at else None
+                    updated_at_ms = created_at_ms  # Use created_at as updated_at if no updated_at field
+                    
+                    msg_dict = {
+                        "id": f"msg-{msg.id}",  # Format: msg-{database_id}
                         "role": msg.role,
                         "content": msg.content,
-                        "timestamp": msg.created_at.isoformat(),
+                        "timestamp": msg.created_at.isoformat() + "Z" if msg.created_at else None,
+                        "createdAt": created_at_ms,
+                        "updatedAt": updated_at_ms,
                         "metadata": msg.message_metadata or {}
-                    })
+                    }
+                    
+                    # Add model/provider if available in metadata
+                    if isinstance(msg.message_metadata, dict):
+                        if "model" in msg.message_metadata:
+                            msg_dict["model"] = msg.message_metadata["model"]
+                        if "provider" in msg.message_metadata:
+                            msg_dict["provider"] = msg.message_metadata["provider"]
+                        if "parent_id" in msg.message_metadata:
+                            msg_dict["parentId"] = msg.message_metadata["parent_id"]
+                    
+                    history.append(msg_dict)
                 
                 # Optionally: warm up Redis cache with recent data
                 if history and redis_client.is_connected():
@@ -308,12 +325,19 @@ class HybridConversationService:
                 if not session:
                     return None
                 
+                # Get metadata
+                metadata = session.session_metadata or {}
+                
                 return {
                     "session_id": session.session_id,
                     "message_count": session.message_count,
-                    "last_activity": session.last_activity.isoformat() if session.last_activity else None,
-                    "created_at": session.created_at.isoformat() if session.created_at else None,
-                    "ttl": None  # No TTL in PostgreSQL
+                    "last_activity": session.last_activity.isoformat() + "Z" if session.last_activity else None,
+                    "created_at": session.created_at.isoformat() + "Z" if session.created_at else None,
+                    "ttl": None,  # No TTL in PostgreSQL
+                    "title": metadata.get("title"),
+                    "description": metadata.get("description"),
+                    "avatar": metadata.get("avatar"),
+                    "pinned": metadata.get("pinned", False)
                 }
             except Exception as e:
                 print(f"✗ Error getting session info from PostgreSQL: {e}")

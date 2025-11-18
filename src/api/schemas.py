@@ -283,18 +283,28 @@ class AgentResponse(BaseModel):
 
 # Conversation schemas
 class Message(BaseModel):
+    id: Optional[str] = None  # Message ID (UUID or database ID)
     role: str
     content: str
-    timestamp: Optional[str] = None
+    timestamp: Optional[str] = None  # ISO 8601 format
+    createdAt: Optional[int] = None  # Unix timestamp in milliseconds
+    updatedAt: Optional[int] = None  # Unix timestamp in milliseconds
     metadata: Optional[dict] = None
+    model: Optional[str] = None  # Model used for assistant messages
+    provider: Optional[str] = None  # Provider used (openai, gemini, etc.)
+    parentId: Optional[str] = None  # Parent message ID for threading
     
     class Config:
         json_schema_extra = {
             "example": {
+                "id": "msg-uuid-1",
                 "role": "user",
                 "content": "Olá, como você está?",
-                "timestamp": "2025-11-12T14:30:00",
-                "metadata": {"ip": "127.0.0.1"}
+                "timestamp": "2025-11-12T14:30:00Z",
+                "createdAt": 1705327800000,
+                "updatedAt": 1705327800000,
+                "metadata": {"ip": "127.0.0.1"},
+                "parentId": None
             }
         }
 

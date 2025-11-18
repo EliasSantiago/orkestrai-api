@@ -9,7 +9,7 @@ These endpoints provide compatibility with LobeChat frontend tRPC calls:
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from src.database import get_db
 from src.api.dependencies import get_current_user_id
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api", tags=["lobechat-compat"])
 
 @router.get("/messages", response_model=List[Message])
 async def get_messages(
-    session_id: Optional[str] = Query(None, description="Session ID to filter messages"),
+    session_id: Optional[str] = Query(None, description="Session ID to filter messages (obrigatório)"),
     topic_id: Optional[str] = Query(None, description="Topic ID (not used, for compatibility)"),
     limit: Optional[int] = Query(100, description="Maximum number of messages to return"),
     user_id: int = Depends(get_current_user_id),
@@ -31,45 +31,52 @@ async def get_messages(
     Get messages (compatible with LobeChat message.getMessages).
     
     This endpoint is compatible with LobeChat's tRPC message.getMessages call.
-    If session_id is provided, returns messages for that session.
-    Otherwise, returns messages from all user sessions (limited).
+    Requires session_id to be provided.
     
     **Query Parameters:**
-    - `session_id` (optional): Filter by specific session
+    - `session_id` (obrigatório): Filter by specific session
     - `topic_id` (optional): Not used, kept for compatibility
     - `limit` (optional): Maximum messages to return (default: 100)
     
     **Response:**
-    List of Message objects compatible with LobeChat format.
+    List of Message objects compatible with LobeChat format with id, createdAt, updatedAt, etc.
     """
-    if session_id:
-        # Get messages from specific session
-        history = HybridConversationService.get_conversation_history(
-            user_id=user_id,
-            session_id=session_id,
-            limit=limit,
-            db=db
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=[{"msg": "session_id is required"}]
         )
-        messages = [Message(**msg) for msg in history]
-        return messages
-    else:
-        # Get messages from all sessions (limited)
-        sessions = HybridConversationService.get_user_sessions(user_id, db=db)
-        all_messages = []
-        
-        for sess_id in sessions[:10]:  # Limit to first 10 sessions
-            history = HybridConversationService.get_conversation_history(
-                user_id=user_id,
-                session_id=sess_id,
-                limit=limit // len(sessions) if sessions else limit,
-                db=db
-            )
-            all_messages.extend([Message(**msg) for msg in history])
-        
-        # Sort by timestamp if available
-        all_messages.sort(key=lambda m: m.timestamp or "", reverse=True)
-        
-        return all_messages[:limit] if limit else all_messages
+    
+    # Get messages from specific session
+    history = HybridConversationService.get_conversation_history(
+        user_id=user_id,
+        session_id=session_id,
+        limit=limit,
+        db=db
+    )
+    
+    # Convert to Message objects, ensuring all fields are present
+    messages = []
+    for msg_dict in history:
+        # Ensure all required fields are present
+        msg_data = {
+            "id": msg_dict.get("id"),
+            "role": msg_dict.get("role"),
+            "content": msg_dict.get("content"),
+            "timestamp": msg_dict.get("timestamp"),
+            "createdAt": msg_dict.get("createdAt"),
+            "updatedAt": msg_dict.get("updatedAt"),
+            "metadata": msg_dict.get("metadata", {}),
+            "model": msg_dict.get("model"),
+            "provider": msg_dict.get("provider"),
+            "parentId": msg_dict.get("parentId")
+        }
+        messages.append(Message(**msg_data))
+    
+    # Sort by timestamp (oldest first) as expected by LobeChat
+    messages.sort(key=lambda m: m.createdAt or 0)
+    
+    return messages
 
 
 @router.get("/sessions/grouped", response_model=List[Dict[str, Any]])
@@ -121,30 +128,39 @@ async def get_grouped_sessions(
             if date_key not in grouped:
                 grouped[date_key] = []
             
-            # Generate title from first message if available
-            title = f"Session {session_id[:8]}"
-            try:
-                history = HybridConversationService.get_conversation_history(
-                    user_id=user_id,
-                    session_id=session_id,
-                    limit=1,
-                    db=db
-                )
-                if history and len(history) > 0:
-                    first_msg = history[0]
-                    content = first_msg.get("content", "")
-                    if content:
-                        # Use first 50 chars as title
-                        title = content[:50] + "..." if len(content) > 50 else content
-            except:
-                pass
+            # Get title from session metadata or generate from first message
+            title = info.get("title") or f"Session {session_id[:8]}"
+            if not title or title == f"Session {session_id[:8]}":
+                try:
+                    history = HybridConversationService.get_conversation_history(
+                        user_id=user_id,
+                        session_id=session_id,
+                        limit=1,
+                        db=db
+                    )
+                    if history and len(history) > 0:
+                        first_msg = history[0]
+                        content = first_msg.get("content", "")
+                        if content:
+                            # Use first 50 chars as title
+                            title = content[:50] + "..." if len(content) > 50 else content
+                except:
+                    pass
+            
+            # Build meta object from session metadata
+            meta = {}
+            if info.get("avatar"):
+                meta["avatar"] = info["avatar"]
+            if info.get("description"):
+                meta["description"] = info["description"]
             
             grouped[date_key].append({
                 "session_id": session_id,
                 "title": title,
                 "message_count": info.get("message_count", 0),
                 "last_activity": info.get("last_activity"),
-                "ttl": info.get("ttl")
+                "ttl": info.get("ttl"),
+                "meta": meta if meta else {}
             })
     
     # Convert to list format

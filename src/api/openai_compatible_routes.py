@@ -14,7 +14,7 @@ import logging
 import time
 import uuid
 import json
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Literal, Union, Dict, Any
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -24,7 +24,7 @@ from src.api.dependencies import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1", tags=["openai-compatible"])
+router = APIRouter(prefix="/api/openai", tags=["openai-compatible"])
 
 
 # ============================================================================
@@ -36,6 +36,35 @@ class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant", "function"]
     content: str
     name: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+
+
+class ToolFunction(BaseModel):
+    """Tool function definition."""
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+
+
+class Tool(BaseModel):
+    """Tool definition for function calling."""
+    type: Literal["function"] = "function"
+    function: ToolFunction
+
+
+class JsonSchema(BaseModel):
+    """JSON Schema for structured output."""
+    name: str
+    description: Optional[str] = None
+    schema: Dict[str, Any]
+    strict: Optional[bool] = False
+
+
+class ResponseFormat(BaseModel):
+    """Response format specification."""
+    type: Literal["text", "json_object", "json_schema"]
+    json_schema: Optional[JsonSchema] = None
 
 
 class ChatCompletionRequest(BaseModel):
@@ -50,6 +79,9 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = Field(default=0, ge=-2, le=2)
     frequency_penalty: Optional[float] = Field(default=0, ge=-2, le=2)
     user: Optional[str] = None
+    tools: Optional[List[Tool]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    response_format: Optional[ResponseFormat] = None
     
     class Config:
         json_schema_extra = {
@@ -194,6 +226,35 @@ async def create_chat_completion(
     # Convert messages to LLMMessage format
     llm_messages = convert_to_llm_messages(request.messages)
     
+    # Convert tools to provider format if provided
+    tools_list = None
+    if request.tools:
+        tools_list = []
+        for tool in request.tools:
+            if tool.type == "function":
+                tools_list.append({
+                    "name": tool.function.name,
+                    "description": tool.function.description,
+                    "parameters": tool.function.parameters
+                })
+    
+    # Handle response_format for structured output
+    response_format_kwargs = {}
+    if request.response_format:
+        if request.response_format.type == "json_schema" and request.response_format.json_schema:
+            # Pass JSON schema to provider
+            response_format_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": request.response_format.json_schema.name,
+                    "description": request.response_format.json_schema.description,
+                    "schema": request.response_format.json_schema.schema,
+                    "strict": request.response_format.json_schema.strict
+                }
+            }
+        elif request.response_format.type == "json_object":
+            response_format_kwargs["response_format"] = {"type": "json_object"}
+    
     # Generate unique ID for this completion
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     created_time = int(time.time())
@@ -208,11 +269,13 @@ async def create_chat_completion(
                 async for chunk in provider.chat(
                     messages=llm_messages,
                     model=request.model,
+                    tools=tools_list,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens,
                     top_p=request.top_p,
                     frequency_penalty=request.frequency_penalty,
-                    presence_penalty=request.presence_penalty
+                    presence_penalty=request.presence_penalty,
+                    **response_format_kwargs
                 ):
                     full_content += chunk
                     
@@ -278,14 +341,18 @@ async def create_chat_completion(
         try:
             # Collect full response
             full_content = ""
+            tool_calls = []
+            
             async for chunk in provider.chat(
                 messages=llm_messages,
                 model=request.model,
+                tools=tools_list,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
                 top_p=request.top_p,
                 frequency_penalty=request.frequency_penalty,
-                presence_penalty=request.presence_penalty
+                presence_penalty=request.presence_penalty,
+                **response_format_kwargs
             ):
                 full_content += chunk
             
@@ -293,6 +360,20 @@ async def create_chat_completion(
             prompt_tokens = sum(len(msg.content.split()) for msg in request.messages)
             completion_tokens = len(full_content.split())
             total_tokens = prompt_tokens + completion_tokens
+            
+            # Determine finish_reason
+            finish_reason = "stop"
+            message_dict = {
+                "role": "assistant",
+                "content": full_content
+            }
+            
+            # Add tool_calls if tools were used (for function calling)
+            # Note: This is a simplified implementation - full tool calling would require
+            # parsing the response to detect function calls
+            if tools_list and tool_calls:
+                message_dict["tool_calls"] = tool_calls
+                finish_reason = "tool_calls"
             
             # Create OpenAI-compatible response
             response = ChatCompletionResponse(
@@ -302,11 +383,8 @@ async def create_chat_completion(
                 choices=[
                     ChatCompletionChoice(
                         index=0,
-                        message=ChatMessage(
-                            role="assistant",
-                            content=full_content
-                        ),
-                        finish_reason="stop"
+                        message=ChatMessage(**message_dict),
+                        finish_reason=finish_reason
                     )
                 ],
                 usage=ChatCompletionUsage(

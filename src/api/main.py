@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api import auth_routes, agent_routes, conversation_routes, adk_integration_routes, agent_chat_routes, models_routes, mcp_routes, file_search_routes, openai_compatible_routes, user_routes, lobechat_compat_routes
+from src.api import auth_routes, agent_routes, conversation_routes, adk_integration_routes, agent_chat_routes, models_routes, mcp_routes, file_search_routes, openai_compatible_routes, user_routes, lobechat_compat_routes, message_routes
 from src.api.mcp.google import google_calendar_oauth_router, google_calendar_oauth_legacy_router
 from src.api.middleware.error_handler import global_exception_handler
 from src.database import init_db
@@ -55,6 +55,7 @@ app.include_router(google_calendar_oauth_legacy_router)  # Legacy path for Googl
 app.include_router(file_search_routes.router)
 app.include_router(openai_compatible_routes.router)  # OpenAI-compatible API for LobeChat, LibreChat, etc.
 app.include_router(lobechat_compat_routes.router)  # LobeChat tRPC compatibility endpoints
+app.include_router(message_routes.router)  # Message-specific routes (stats, rank, heatmap, CRUD)
 
 
 @app.get("/")
