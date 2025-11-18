@@ -24,6 +24,7 @@ from src.auth import (
 from src.config import Config
 from src.email_service import send_password_reset_email
 from urllib.parse import urlencode
+from src.api.helpers import create_error_response
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer()
@@ -34,23 +35,23 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
     # Validate password confirmation
     if user_data.password != user_data.password_confirm:
-        raise HTTPException(
+        raise create_error_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match"
+            message="Passwords do not match"
         )
     
     # Check if name already exists
     if get_user_by_name(db, user_data.name):
-        raise HTTPException(
+        raise create_error_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Name already registered"
+            message="Name already registered"
         )
     
     # Check if email already exists
     if get_user_by_email(db, user_data.email):
-        raise HTTPException(
+        raise create_error_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            message="Email already registered"
         )
     
     # Create user
@@ -72,10 +73,9 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """
     user = authenticate_user_by_email(db, login_data.email, login_data.password)
     if not user:
-        raise HTTPException(
+        raise create_error_response(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            message="Incorrect email or password"
         )
     
     access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
@@ -100,9 +100,9 @@ async def get_current_user(
         user_id: int = payload.get("user_id")
         
         if email is None and user_id is None:
-            raise HTTPException(
+            raise create_error_response(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
+                message="Could not validate credentials"
             )
         
         # Try to get user by email first, then by user_id
@@ -115,15 +115,15 @@ async def get_current_user(
             user = None
             
     except Exception:
-        raise HTTPException(
+        raise create_error_response(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
+            message="Could not validate credentials"
         )
     
     if user is None:
-        raise HTTPException(
+        raise create_error_response(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            message="User not found"
         )
     
     return user

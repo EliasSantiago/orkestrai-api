@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from src.adk_conversation_middleware import get_adk_middleware
 from src.api.dependencies import get_current_user_id
-from src.api.di import get_chat_with_agent_use_case, get_get_agent_use_case
-from src.application.use_cases.agents import ChatWithAgentUseCase, GetAgentUseCase
+from src.api.di import get_chat_with_agent_use_case, get_get_agent_use_case, get_get_user_agents_use_case
+from src.application.use_cases.agents import ChatWithAgentUseCase, GetAgentUseCase, GetUserAgentsUseCase
 from src.domain.exceptions import AgentNotFoundError, UnsupportedModelError, InvalidModelError
 from src.infrastructure.database.entity_mapper import agent_entity_to_model
 from pydantic import BaseModel
@@ -60,7 +60,7 @@ def sanitize_agent_name(name: str, agent_id: int) -> str:
 class ChatRequest(BaseModel):
     """Request model for agent chat."""
     message: str
-    agent_id: int  # Required: must specify which agent to use
+    agent_id: Optional[int] = None  # Optional: uses first agent if not provided
     session_id: Optional[str] = None  # Optional: auto-generated if not provided
     model: Optional[str] = None  # Optional: override agent's model (e.g., "openai/gpt-4o-mini", "gemini/gemini-2.0-flash-exp")
     
@@ -106,7 +106,8 @@ async def chat_with_agent(
     request: ChatRequest,
     user_id: int = Depends(get_current_user_id),
     chat_use_case: ChatWithAgentUseCase = Depends(get_chat_with_agent_use_case),
-    get_agent_use_case: GetAgentUseCase = Depends(get_get_agent_use_case)
+    get_agent_use_case: GetAgentUseCase = Depends(get_get_agent_use_case),
+    get_user_agents_use_case: GetUserAgentsUseCase = Depends(get_get_user_agents_use_case)
 ):
     """
     Chat with an agent.
@@ -114,12 +115,13 @@ async def chat_with_agent(
     This endpoint allows you to send messages to a specific agent and get responses.
     It automatically handles conversation context if session_id is provided.
     If session_id is not provided, a new one is generated automatically.
+    If agent_id is not provided, uses the first agent of the user.
     
     **Required Fields:**
     - `message`: The message to send to the agent
-    - `agent_id`: The ID of the agent to chat with
     
     **Optional Fields:**
+    - `agent_id`: The ID of the agent to chat with (uses first agent if not provided)
     - `session_id`: Session ID for conversation continuity (auto-generated if not provided)
     - `model`: Override the agent's default model (e.g., "gpt-4o-mini", "gemini-2.5-flash", "claude-3-5-sonnet-latest")
     
@@ -140,6 +142,18 @@ async def chat_with_agent(
     - You want to test different models with the same agent
     - You need a faster/cheaper model for simple queries
     """
+    # Determine agent_id - use first agent if not provided
+    agent_id = request.agent_id
+    if agent_id is None:
+        agents = get_user_agents_use_case.execute(user_id)
+        if not agents:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=[{"msg": "No agents found. Please create an agent first."}],
+                headers={"X-Error-Type": "no_agents"}
+            )
+        agent_id = agents[0].id
+    
     # Generate session_id if not provided
     session_id = request.session_id or generate_session_id()
     
@@ -150,7 +164,7 @@ async def chat_with_agent(
     
     try:
         # Get agent info for response (need name and id)
-        agent_entity = get_agent_use_case.execute(request.agent_id, user_id)
+        agent_entity = get_agent_use_case.execute(agent_id, user_id)
         agent_model = agent_entity_to_model(agent_entity)
         
         # Determine model name
@@ -159,7 +173,7 @@ async def chat_with_agent(
         # Execute chat use case (handles all the complex logic)
         response = await chat_use_case.execute(
             user_id=user_id,
-            agent_id=request.agent_id,
+            agent_id=agent_id,
             message=request.message,
             session_id=session_id,
             model_override=request.model
@@ -175,10 +189,12 @@ async def chat_with_agent(
         
     except (AgentNotFoundError, InvalidModelError, UnsupportedModelError):
         raise
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error executing agent: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error executing agent: {str(e)}"
+            detail=[{"msg": f"Error executing agent: {str(e)}"}]
         )
 
