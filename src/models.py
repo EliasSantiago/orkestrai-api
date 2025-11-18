@@ -1,7 +1,8 @@
 """Database models for users and agents."""
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, JSON, BigInteger
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, BigInteger
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from src.database import Base
 from cryptography.fernet import Fernet
@@ -21,8 +22,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     
     # User preferences (theme, language, layout, etc)
-    # Stored as JSON for flexibility
-    preferences = Column(JSON, nullable=True, default=dict)
+    # Stored as JSONB for flexibility and better performance
+    preferences = Column(JSONB, nullable=True, default=dict)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
