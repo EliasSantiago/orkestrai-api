@@ -63,6 +63,22 @@ DELETE /api/conversations/sessions                    # Deletar todas
 
 ---
 
+## 🔗 **LobeChat Compatibility** ✅ **NOVO**
+
+Endpoints compatíveis com frontend LobeChat (tRPC):
+
+```bash
+GET /api/messages                    # Obter mensagens (compatível com message.getMessages)
+GET /api/sessions/grouped            # Sessões agrupadas (compatível com session.getGroupedSessions)
+GET /api/topics                      # Tópicos (retorna vazio, compatível com topic.getTopics)
+GET /api/plugins                     # Plugins locais (retorna vazio, compatível com plugin.getPlugins)
+GET /api/market                      # Marketplace (retorna vazio, compatível com market.getPluginList)
+```
+
+**Detalhes:** Consulte `LOBECHAT_COMPAT_API.md` para documentação completa.
+
+---
+
 ## 🔗 **Integração ADK**
 
 ```bash
