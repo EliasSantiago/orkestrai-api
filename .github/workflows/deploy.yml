@@ -165,8 +165,27 @@ jobs:
             echo "🔧 Starting infrastructure services..."
             docker compose -f docker-compose.prod.yml up -d postgres redis
             
-            # Aguardar PostgreSQL estar pronto (com timeout)
-            echo "⏳ Waiting for PostgreSQL..."
+            # Aguardar container do PostgreSQL existir e estar rodando
+            echo "⏳ Waiting for PostgreSQL container to start..."
+            CONTAINER_WAIT=30
+            CONTAINER_ELAPSED=0
+            until docker ps --filter "name=agents_postgres" --filter "status=running" | grep -q agents_postgres; do
+              if [ $CONTAINER_ELAPSED -ge $CONTAINER_WAIT ]; then
+                echo "❌ PostgreSQL container failed to start after ${CONTAINER_WAIT}s"
+                echo "🔍 Container status:"
+                docker ps -a | grep postgres
+                echo "📋 Docker logs:"
+                docker logs agents_postgres 2>&1 || echo "Container not found"
+                exit 1
+              fi
+              echo "  Waiting for container... (${CONTAINER_ELAPSED}s/${CONTAINER_WAIT}s)"
+              sleep 2
+              CONTAINER_ELAPSED=$((CONTAINER_ELAPSED + 2))
+            done
+            echo "✅ PostgreSQL container is running"
+            
+            # Aguardar PostgreSQL estar pronto para conexões (com timeout)
+            echo "⏳ Waiting for PostgreSQL to accept connections..."
             
             # Obter credenciais do .env com fallback para defaults
             PG_USER="${POSTGRES_USER:-agentuser}"
@@ -183,7 +202,7 @@ jobs:
                 docker logs --tail 50 agents_postgres
                 echo ""
                 echo "🔍 Container status:"
-                docker ps -a | grep postgres
+                docker inspect agents_postgres --format='{{.State.Status}}: {{.State.Health.Status}}' || docker ps -a | grep postgres
                 exit 1
               fi
               echo "  Tentativa $((ELAPSED / 2 + 1))/$((TIMEOUT / 2))..."
@@ -192,8 +211,27 @@ jobs:
             done
             echo "✅ PostgreSQL is ready and accepting connections"
             
-            # Verificar Redis
-            echo "⏳ Waiting for Redis..."
+            # Aguardar container do Redis existir e estar rodando
+            echo "⏳ Waiting for Redis container to start..."
+            REDIS_CONTAINER_WAIT=30
+            REDIS_CONTAINER_ELAPSED=0
+            until docker ps --filter "name=agents_redis" --filter "status=running" | grep -q agents_redis; do
+              if [ $REDIS_CONTAINER_ELAPSED -ge $REDIS_CONTAINER_WAIT ]; then
+                echo "❌ Redis container failed to start after ${REDIS_CONTAINER_WAIT}s"
+                echo "🔍 Container status:"
+                docker ps -a | grep redis
+                echo "📋 Docker logs:"
+                docker logs agents_redis 2>&1 || echo "Container not found"
+                exit 1
+              fi
+              echo "  Waiting for container... (${REDIS_CONTAINER_ELAPSED}s/${REDIS_CONTAINER_WAIT}s)"
+              sleep 2
+              REDIS_CONTAINER_ELAPSED=$((REDIS_CONTAINER_ELAPSED + 2))
+            done
+            echo "✅ Redis container is running"
+            
+            # Verificar Redis está aceitando conexões
+            echo "⏳ Waiting for Redis to accept connections..."
             REDIS_TIMEOUT=30
             REDIS_ELAPSED=0
             REDIS_PASS="${REDIS_PASSWORD:-}"
@@ -203,6 +241,9 @@ jobs:
                 echo "❌ Redis timeout after ${REDIS_TIMEOUT}s"
                 echo "📋 Redis logs:"
                 docker logs --tail 50 agents_redis
+                echo ""
+                echo "🔍 Container status:"
+                docker inspect agents_redis --format='{{.State.Status}}: {{.State.Health.Status}}' || docker ps -a | grep redis
                 exit 1
               fi
               echo "  Tentativa $((REDIS_ELAPSED / 2 + 1))/$((REDIS_TIMEOUT / 2))..."
