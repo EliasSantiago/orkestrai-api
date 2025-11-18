@@ -128,18 +128,20 @@ jobs:
             done < .env
             set +a
             
-            # Salvar container atual para rollback
-            CURRENT_CONTAINER=$(docker ps -q -f name=orkestrai-api) || true
-            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null) || echo "none"
+            # Salvar imagem atual para rollback
+            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null || docker images "${IMAGE_NAME}:latest" --format "{{.Repository}}:{{.Tag}}" | head -1 || echo "none")
             echo "📦 Current image: $CURRENT_IMAGE"
             
             # Função de rollback
             rollback() {
               echo "❌ Deployment failed! Starting rollback..."
-              if [ -n "$CURRENT_CONTAINER" ]; then
-                echo "🔄 Restoring previous container..."
-                docker compose -f docker-compose.prod.yml down api || true
-                docker start "$CURRENT_CONTAINER" || true
+              if [ "$CURRENT_IMAGE" != "none" ] && [ -n "$CURRENT_IMAGE" ]; then
+                echo "🔄 Restoring previous image: $CURRENT_IMAGE"
+                docker tag "$CURRENT_IMAGE" "${IMAGE_NAME}:latest" || true
+                docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api || true
+                echo "✅ Rollback completed"
+              else
+                echo "⚠️  No previous image to rollback to"
               fi
               exit 1
             }

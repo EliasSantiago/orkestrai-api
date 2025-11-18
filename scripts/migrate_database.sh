@@ -29,19 +29,30 @@ fi
 echo "⏳ Aguardando PostgreSQL..."
 MAX_TRIES=30
 TRIES=0
+LAST_ERROR=""
 
 while [ $TRIES -lt $MAX_TRIES ]; do
-    if python3 -c "from src.database import test_connection; exit(0 if test_connection() else 1)" 2>/dev/null; then
+    ERROR_OUTPUT=$(python3 -c "from src.database import test_connection; import sys; sys.exit(0 if test_connection() else 1)" 2>&1)
+    EXIT_CODE=$?
+    
+    if [ $EXIT_CODE -eq 0 ]; then
         echo -e "${GREEN}✓ PostgreSQL pronto!${NC}"
         break
+    else
+        LAST_ERROR="$ERROR_OUTPUT"
+        TRIES=$((TRIES + 1))
+        echo "  Tentativa $TRIES/$MAX_TRIES..."
+        sleep 2
     fi
-    TRIES=$((TRIES + 1))
-    echo "  Tentativa $TRIES/$MAX_TRIES..."
-    sleep 2
 done
 
 if [ $TRIES -eq $MAX_TRIES ]; then
     echo -e "${RED}✗ Timeout: PostgreSQL não respondeu${NC}"
+    echo -e "${RED}Último erro:${NC}"
+    echo "$LAST_ERROR"
+    echo ""
+    echo "🔍 Verificando conexão..."
+    python3 -c "from src.config import Config; print(f'DATABASE_URL: {Config.DATABASE_URL}')" 2>&1 || true
     exit 1
 fi
 
