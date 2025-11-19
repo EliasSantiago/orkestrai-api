@@ -80,26 +80,20 @@ async def get_grouped_sessions(
     """
     Get grouped sessions compatible with LobeChat.
     
-    Returns sessions grouped by date.
+    Returns sessions in ChatSessionList format:
+    - sessionGroups: Array of SessionGroupItem (custom groups, empty for now)
+    - sessions: Array of LobeAgentSession (all sessions flattened)
+    
+    The frontend handles date grouping automatically.
     """
     sessions = HybridConversationService.get_user_sessions(user_id, db=db)
     
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    # Build flat list of sessions
+    all_sessions = []
     
     for session_id in sessions:
         info = HybridConversationService.get_session_info(user_id, session_id, db=db)
         if info:
-            date_key = "today"
-            if info.get("last_activity"):
-                try:
-                    dt = datetime.fromisoformat(info["last_activity"].replace("Z", "+00:00"))
-                    date_key = dt.strftime("%Y-%m-%d")
-                except:
-                    pass
-            
-            if date_key not in grouped:
-                grouped[date_key] = []
-            
             title = info.get("title") or f"Session {session_id[:8]}"
             if not title or title == f"Session {session_id[:8]}":
                 try:
@@ -122,28 +116,46 @@ async def get_grouped_sessions(
                 meta["avatar"] = info["avatar"]
             if info.get("description"):
                 meta["description"] = info["description"]
+            if info.get("pinned"):
+                meta["pinned"] = info["pinned"]
             
-            grouped[date_key].append({
+            # Get timestamps
+            last_activity = info.get("last_activity")
+            if last_activity:
+                try:
+                    dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+                    created_at = dt.timestamp() * 1000  # Convert to milliseconds
+                    updated_at = dt.timestamp() * 1000
+                except:
+                    created_at = int(datetime.utcnow().timestamp() * 1000)
+                    updated_at = created_at
+            else:
+                created_at = int(datetime.utcnow().timestamp() * 1000)
+                updated_at = created_at
+            
+            all_sessions.append({
                 "id": session_id,
-                "session_id": session_id,
-                "title": title,
-                "message_count": info.get("message_count", 0),
-                "last_activity": info.get("last_activity"),
-                "ttl": info.get("ttl"),
-                "meta": meta if meta else {},
-                "createdAt": info.get("last_activity") or datetime.utcnow().isoformat() + "Z",
-                "updatedAt": info.get("last_activity") or datetime.utcnow().isoformat() + "Z"
+                "type": "agent",
+                "createdAt": created_at,
+                "updatedAt": updated_at,
+                "meta": {
+                    "title": title,
+                    **meta
+                },
+                "pinned": meta.get("pinned", False),
+                "group": None,  # No custom groups for now
             })
     
-    result = [
-        {
-            "date": date,
-            "sessions": sorted(sessions, key=lambda s: s.get("last_activity", ""), reverse=True)
-        }
-        for date, sessions in sorted(grouped.items(), reverse=True)
-    ]
+    # Sort by updatedAt (most recent first)
+    all_sessions.sort(key=lambda s: s.get("updatedAt", 0), reverse=True)
     
-    return {"sessionGroups": result, "sessions": []}
+    # Return in ChatSessionList format
+    # sessionGroups: empty array (no custom groups yet)
+    # sessions: flat array of all sessions
+    return {
+        "sessionGroups": [],
+        "sessions": all_sessions
+    }
 
 
 @sessions_router.post("")
@@ -1144,13 +1156,37 @@ market_router = APIRouter(prefix="/api/market", tags=["market"])
 async def get_plugin_list(
     category: Optional[str] = Query(None),
     locale: Optional[str] = Query(None),
+    page: Optional[int] = Query(None),
+    pageSize: Optional[int] = Query(None),
+    q: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
+    order: Optional[str] = Query(None),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Get plugin list from market."""
+    """
+    Get plugin list from market.
+    
+    Compatible with LobeChat's market.getPluginList tRPC call.
+    Supports pagination, filtering, and sorting.
+    
+    Parameters:
+    - category: Filter by category
+    - locale: Locale for translations (e.g., "en-US", "pt-BR")
+    - page: Page number (default: 1)
+    - pageSize: Items per page (default: 20)
+    - q: Search query
+    - sort: Sort field
+    - order: Sort order ("asc" or "desc")
+    
+    Returns empty marketplace as we use the public marketplace.
+    Kept for compatibility with LobeChat frontend.
+    """
     return {
-        "plugins": [],
+        "items": [],
         "categories": [],
-        "total": 0
+        "total": 0,
+        "page": page or 1,
+        "pageSize": pageSize or 20
     }
 
 

@@ -54,9 +54,9 @@ app.include_router(google_calendar_oauth_router)
 app.include_router(google_calendar_oauth_legacy_router)  # Legacy path for Google Cloud Console compatibility
 app.include_router(file_search_routes.router)
 app.include_router(openai_compatible_routes.router)  # OpenAI-compatible API for LobeChat, LibreChat, etc.
-app.include_router(lobechat_compat_routes.router)  # LobeChat compatibility endpoints (legacy)
+app.include_router(lobechat_rest_routes.router)  # Complete REST API routes for LobeChat frontend (must be before compat routes)
+app.include_router(lobechat_compat_routes.router)  # LobeChat compatibility endpoints (legacy, deprecated)
 app.include_router(message_routes.router)  # Message-specific routes (stats, rank, heatmap, CRUD)
-app.include_router(lobechat_rest_routes.router)  # Complete REST API routes for LobeChat frontend
 app.include_router(config_routes.router)  # Config routes (global config, default agent config)
 
 
