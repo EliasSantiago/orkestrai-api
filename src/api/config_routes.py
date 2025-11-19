@@ -43,12 +43,37 @@ async def get_global_config(
             },
         },
         "serverFeatureFlags": {
+            # Authentication flags
             "enableWebRTC": False,
             "enableOAuthSSO": False,
             "enablePassword": True,
             "enableRegister": True,
             "enableTelemetryChat": False,
             "enableAccessCode": False,
+            # Feature flags for UI functionality
+            "create_session": True,  # Enable agent creation
+            "edit_agent": True,  # Enable agent editing
+            "plugins": True,  # Enable plugins
+            "dalle": True,  # Enable DALL-E
+            "ai_image": True,  # Enable AI image generation
+            "speech_to_text": True,  # Enable STT
+            "token_counter": True,  # Enable token counter
+            "welcome_suggest": True,  # Enable welcome suggestions
+            "knowledge_base": True,  # Enable knowledge base
+            "rag_eval": False,  # Disable RAG eval (advanced feature)
+            "market": True,  # Enable market/discover
+            "changelog": True,  # Enable changelog
+            "check_updates": True,  # Enable update checks
+            "group_chat": False,  # Disable group chat (can be enabled later)
+            "pin_list": False,  # Disable pin list (can be enabled later)
+            "language_model_settings": True,  # Enable LLM settings
+            "provider_settings": True,  # Enable provider settings
+            "openai_api_key": True,  # Enable OpenAI API key config
+            "openai_proxy_url": True,  # Enable OpenAI proxy URL config
+            "api_key_manage": False,  # Disable API key management (can be enabled later)
+            "cloud_promotion": False,  # Disable cloud promotion
+            "commercial_hide_github": False,  # Show GitHub links
+            "commercial_hide_docs": False,  # Show docs links
         },
     }
 
