@@ -135,6 +135,7 @@ class SessionChatRequest(BaseModel):
     parent_id: Optional[str] = None
     topic_id: Optional[str] = None
     create_new_topic: Optional[bool] = False
+    agent_id: Optional[int] = None  # Optional agent ID to use for this chat
 
 
 class SessionChatResponse(BaseModel):
@@ -171,30 +172,54 @@ async def chat_in_session(
     
     Compatible with LobeChat's aiChat.sendMessageInServer functionality.
     Creates both user and assistant messages and returns them with IDs.
+    
+    If the session doesn't exist, it will be created automatically.
+    This allows the frontend to use temporary session IDs that get created on first message.
     """
-    # Verify session belongs to user
+    # Get or create session - if it doesn't exist, create it automatically
     session = db.query(ConversationSession).filter(
         ConversationSession.session_id == session_id,
         ConversationSession.user_id == user_id
     ).first()
     
     if not session:
-        raise create_error_response(
-            status_code=status.HTTP_404_NOT_FOUND,
-            message="Session not found"
+        # Create session automatically if it doesn't exist
+        # This handles temporary session IDs from the frontend
+        session = ConversationSession(
+            session_id=session_id,
+            user_id=user_id,
+            message_count=0,
+            is_active=True,
+            session_metadata={}
         )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
     
-    # Get first agent (or use model directly if no agent)
-    agent_id = None
-    agents = get_user_agents_use_case.execute(user_id)
-    if agents:
-        agent_id = agents[0].id
+    # Get agent ID - use from request, or first user agent, or default agent (ID 1)
+    agent_id = request.agent_id
     
     if not agent_id:
-        raise create_error_response(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            message="No agents available. Please create an agent first."
-        )
+        # Try to get first agent from user's agents
+        agents = get_user_agents_use_case.execute(user_id)
+        if agents:
+            agent_id = agents[0].id
+    
+    # If still no agent_id, use default agent (ID 1)
+    # This allows the frontend to work without explicitly creating agents
+    if not agent_id:
+        agent_id = 1  # Default agent ID
+    
+    # Verify agent exists and belongs to user (or is default agent)
+    if agent_id != 1:  # Skip verification for default agent
+        from src.models import Agent
+        agent = db.query(Agent).filter(
+            Agent.id == agent_id,
+            Agent.user_id == user_id
+        ).first()
+        if not agent:
+            # Fallback to default agent if specified agent doesn't exist
+            agent_id = 1
     
     # Generate message IDs
     user_message_id = f"msg-{uuid.uuid4()}"
