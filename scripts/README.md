@@ -7,6 +7,7 @@ Scripts essenciais para deploy, monitoramento e manutenção da aplicação.
 ```
 scripts/
 ├── README.md                   # Este arquivo
+├── start_backend.sh           # Iniciar backend em modo desenvolvimento (Python local)
 ├── deploy_manual.sh           # Deploy manual no servidor
 ├── apply_migration.sh         # Aplicar migration SQL manual (produção)
 ├── migrate_database.sh        # Criar tabelas + migrations (dev)
@@ -19,6 +20,24 @@ scripts/
 ├── backup_db.sh              # Backup do PostgreSQL
 └── clear_mcp_cache.py         # Limpar cache MCP tools
 ```
+
+## 💻 Desenvolvimento Local
+
+### Iniciar Backend em Python
+```bash
+./scripts/start_backend.sh
+```
+Inicia o servidor FastAPI em modo desenvolvimento com hot reload.
+- Cria ambiente virtual automaticamente se não existir
+- Instala dependências se necessário
+- Verifica se PostgreSQL e Redis estão rodando (Docker)
+- Inicia servidor em `http://localhost:8001`
+- Documentação disponível em `http://localhost:8001/docs`
+
+**Requisitos:**
+- Python 3.11+
+- PostgreSQL e Redis rodando (via Docker ou localmente)
+- Arquivo `.env` configurado
 
 ## 🚀 Deploy
 

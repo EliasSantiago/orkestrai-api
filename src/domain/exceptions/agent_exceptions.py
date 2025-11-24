@@ -29,13 +29,13 @@ class InvalidModelError(AgentException):
 class FileSearchModelMismatchError(AgentException):
     """Raised when model is incompatible with file search."""
     
-    def __init__(self, model: str, required_model: str = "gemini-2.5-flash"):
+    def __init__(self, model: str, required_model: str = "gemini-2.5-flash, gemini-3-pro-preview, gemini-3-pro, or gemini-2.5-pro"):
         self.model = model
         self.required_model = required_model
         super().__init__(
-            f"File Search (RAG) is only supported with model '{required_model}'. "
+            f"File Search (RAG) is only supported with Gemini models that support RAG: {required_model}. "
             f"Current model: '{model}'. "
-            f"Please use '{required_model}' when enabling File Search."
+            f"Please use a supported Gemini model when enabling File Search."
         )
 
 

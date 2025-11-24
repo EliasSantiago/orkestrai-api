@@ -1,14 +1,23 @@
 """Abstract base class for LLM providers."""
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, AsyncIterator
+from typing import List, Dict, Any, Optional, AsyncIterator, Union
 from pydantic import BaseModel
+
+
+class FilePart(BaseModel):
+    """File part in a message."""
+    type: str  # "image", "pdf", "text", etc.
+    data: Union[str, bytes]  # base64 encoded data or bytes
+    mime_type: Optional[str] = None
+    file_name: Optional[str] = None
 
 
 class LLMMessage(BaseModel):
     """Message in a conversation."""
     role: str  # "user", "assistant", "system"
     content: str
+    files: Optional[List[FilePart]] = None  # Optional list of file attachments
 
 
 class LLMProvider(ABC):

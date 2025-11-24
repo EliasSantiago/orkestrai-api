@@ -8,7 +8,7 @@ Strategy:
 - PostgreSQL: Permanent storage for all conversations
 """
 
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -35,6 +35,7 @@ class HybridConversationService:
         session_id: str,
         content: str,
         metadata: Optional[Dict[str, Any]] = None,
+        agent_id: Optional[int] = None,
         db: Optional[Session] = None
     ) -> bool:
         """
@@ -61,12 +62,25 @@ class HybridConversationService:
                 ).first()
                 
                 if not session:
+                    # Create new session with agent_id in metadata
+                    session_metadata = {}
+                    if agent_id:
+                        session_metadata["agent_id"] = agent_id
+                    
                     session = ConversationSession(
                         session_id=session_id,
                         user_id=user_id,
-                        message_count=0
+                        message_count=0,
+                        session_metadata=session_metadata
                     )
                     db.add(session)
+                else:
+                    # Update existing session metadata with agent_id if provided
+                    if agent_id:
+                        session_metadata = session.session_metadata or {}
+                        if "agent_id" not in session_metadata:
+                            session_metadata["agent_id"] = agent_id
+                            session.session_metadata = session_metadata
                 
                 # Create message
                 message = ConversationMessage(
@@ -247,33 +261,54 @@ class HybridConversationService:
         return []
     
     @staticmethod
-    def get_user_sessions(user_id: int, db: Optional[Session] = None) -> List[str]:
+    def get_user_sessions(
+        user_id: int, 
+        db: Optional[Session] = None,
+        limit: Optional[int] = None,
+        offset: int = 0
+    ) -> Tuple[List[str], int]:
         """
-        Get all session IDs for a user.
-        Combines active sessions from Redis and all sessions from PostgreSQL.
+        Get session IDs for a user with pagination support.
+        Uses PostgreSQL as the source of truth for pagination.
+        Redis sessions are included but pagination is based on PostgreSQL.
+        
+        Returns:
+            tuple: (list of session IDs, total count)
         """
-        sessions = set()
+        total_count = 0
+        session_list = []
         
-        # Get from Redis (active sessions)
-        redis_client = get_redis_client()
-        if redis_client.is_connected():
-            redis_sessions = redis_client.get_user_sessions(user_id)
-            sessions.update(redis_sessions)
-        
-        # Get from PostgreSQL (all sessions, including inactive)
         if db:
             try:
-                db_sessions = db.query(ConversationSession.session_id).filter(
+                # Get total count from PostgreSQL
+                total_count = db.query(ConversationSession.session_id).filter(
                     ConversationSession.user_id == user_id,
                     ConversationSession.is_active == True
-                ).order_by(desc(ConversationSession.last_activity)).all()
+                ).count()
                 
+                # Get paginated sessions from PostgreSQL
+                query = db.query(ConversationSession.session_id).filter(
+                    ConversationSession.user_id == user_id,
+                    ConversationSession.is_active == True
+                ).order_by(desc(ConversationSession.last_activity))
+                
+                if limit:
+                    query = query.limit(limit).offset(offset)
+                
+                db_sessions = query.all()
+                
+                # Extract session IDs
                 for (session_id,) in db_sessions:
-                    sessions.add(session_id)
+                    session_list.append(session_id)
             except Exception as e:
                 print(f"✗ Error reading sessions from PostgreSQL: {e}")
+                # Fallback: get from Redis if PostgreSQL fails
+                redis_client = get_redis_client()
+                if redis_client.is_connected():
+                    session_list = redis_client.get_user_sessions(user_id)
+                    total_count = len(session_list)
         
-        return list(sessions)
+        return session_list, total_count
     
     @staticmethod
     def clear_session(user_id: int, session_id: str, db: Optional[Session] = None) -> bool:
@@ -337,7 +372,8 @@ class HybridConversationService:
                     "title": metadata.get("title"),
                     "description": metadata.get("description"),
                     "avatar": metadata.get("avatar"),
-                    "pinned": metadata.get("pinned", False)
+                    "pinned": metadata.get("pinned", False),
+                    "agent_id": metadata.get("agent_id")  # Include agent_id from metadata
                 }
             except Exception as e:
                 print(f"✗ Error getting session info from PostgreSQL: {e}")

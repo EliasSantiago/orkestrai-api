@@ -40,18 +40,40 @@ class ValidationService:
         """
         Validate file search model compatibility.
         
-        File Search (RAG) only works with gemini-2.5-flash.
+        File Search (RAG) works with Gemini models that support RAG:
+        - gemini-2.5-flash
+        - gemini-3-pro-preview
+        - gemini-3-pro
+        - gemini-2.5-pro
         
         Args:
-            model: Model name
+            model: Model name (can be 'gemini-2.5-flash', 'gemini/gemini-3-pro-preview', etc.)
             use_file_search: Whether file search is enabled
             
         Raises:
             FileSearchModelMismatchError: If model is incompatible with file search
         """
-        if use_file_search and model != "gemini-2.5-flash":
+        if not use_file_search:
+            return
+        
+        # Extract model name without provider prefix (e.g., 'gemini/gemini-3-pro-preview' -> 'gemini-3-pro-preview')
+        model_name = model.split('/')[-1] if '/' in model else model
+        
+        # Models that support RAG
+        gemini_rag_models = [
+            'gemini-2.5-flash',
+            'gemini-3-pro',
+            'gemini-3-pro-preview',
+            'gemini-2.5-pro',
+        ]
+        
+        # Check if it's a Gemini model and supports RAG
+        is_gemini_model = model.startswith('gemini/') or model_name.startswith('gemini-')
+        supports_rag = any(model_name.endswith(rag_model) or model_name == rag_model for rag_model in gemini_rag_models)
+        
+        if not (is_gemini_model and supports_rag):
             raise FileSearchModelMismatchError(
                 model=model,
-                required_model="gemini-2.5-flash"
+                required_model="gemini-2.5-flash, gemini-3-pro-preview, gemini-3-pro, or gemini-2.5-pro"
             )
 

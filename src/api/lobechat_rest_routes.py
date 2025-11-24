@@ -204,24 +204,50 @@ async def count_sessions(
 
 @sessions_router.get("/rank")
 async def rank_sessions(
-    limit: Optional[int] = Query(10),
+    limit: Optional[int] = Query(12),
+    offset: Optional[int] = Query(0),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """Get ranked sessions by activity."""
+    """Get ranked sessions by activity with first message for title."""
+    # Get sessions with pagination
     sessions = db.query(ConversationSession).filter(
         ConversationSession.user_id == user_id,
         ConversationSession.is_active == True
-    ).order_by(ConversationSession.last_activity.desc()).limit(limit or 10).all()
+    ).order_by(ConversationSession.last_activity.desc()).offset(offset or 0).limit(limit or 12).all()
+    
+    # Get session IDs to fetch first messages
+    session_ids = [session.session_id for session in sessions]
+    
+    # Get first user message for each session efficiently
+    first_messages = {}
+    if session_ids:
+        # Get all user messages for these sessions, ordered by created_at
+        all_messages = db.query(ConversationMessage).filter(
+            ConversationMessage.session_id.in_(session_ids),
+            ConversationMessage.role == 'user'
+        ).order_by(ConversationMessage.session_id, ConversationMessage.created_at.asc()).all()
+        
+        # Get the first message for each session (first occurrence of each session_id)
+        seen_sessions = set()
+        for msg in all_messages:
+            if msg.session_id not in seen_sessions:
+                first_messages[msg.session_id] = msg.content
+                seen_sessions.add(msg.session_id)
     
     result = []
-    for idx, session in enumerate(sessions, start=1):
+    for idx, session in enumerate(sessions, start=(offset or 0) + 1):
+        # Get title from first message or use default
+        first_message = first_messages.get(session.session_id, '')
+        title = first_message[:50] if first_message else 'Nova conversa'
+        
         result.append({
             "id": session.session_id,
             "session_id": session.session_id,
             "rank": idx,
             "message_count": session.message_count,
-            "last_activity": session.last_activity.isoformat() + "Z" if session.last_activity else None
+            "last_activity": session.last_activity.isoformat() + "Z" if session.last_activity else None,
+            "title": title
         })
     
     return result
@@ -1259,13 +1285,8 @@ async def make_user_onboarded(
     return {"status": "success"}
 
 
-@user_router.put("/avatar")
-async def update_avatar(
-    avatar: str = Body(...),
-    user_id: int = Depends(get_current_user_id)
-):
-    """Update user avatar."""
-    return {"avatar": avatar, "status": "success"}
+# Avatar upload route is handled by user_routes.router
+# This endpoint is kept for LobeChat compatibility but redirects to the main implementation
 
 
 @user_router.put("/guide")

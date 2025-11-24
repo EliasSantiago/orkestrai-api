@@ -19,12 +19,17 @@ class SQLAlchemyAgentRepository(AgentRepository):
             id=model.id,
             name=model.name,
             description=model.description,
+            agent_type=getattr(model, 'agent_type', 'llm'),
             instruction=model.instruction,
             model=model.model,
             tools=model.tools or [],
             use_file_search=model.use_file_search,
+            workflow_config=getattr(model, 'workflow_config', None) or {},
+            custom_config=getattr(model, 'custom_config', None) or {},
             user_id=model.user_id,
             is_active=model.is_active,
+            is_favorite=getattr(model, 'is_favorite', False),
+            icon=getattr(model, 'icon', None),
             created_at=model.created_at,
             updated_at=model.updated_at
         )
@@ -39,23 +44,34 @@ class SQLAlchemyAgentRepository(AgentRepository):
             if model:
                 model.name = entity.name
                 model.description = entity.description
+                model.agent_type = entity.agent_type
                 model.instruction = entity.instruction
                 model.model = entity.model
                 model.tools = entity.tools
                 model.use_file_search = entity.use_file_search
+                model.workflow_config = entity.workflow_config
+                model.custom_config = entity.custom_config
+                model.is_favorite = entity.is_favorite
+                model.icon = getattr(entity, 'icon', None)
                 return model
         
         # Create new
-        return AgentModel(
+        model = AgentModel(
             name=entity.name,
             description=entity.description,
+            agent_type=entity.agent_type,
             instruction=entity.instruction,
             model=entity.model,
             tools=entity.tools,
             use_file_search=entity.use_file_search,
+            workflow_config=entity.workflow_config,
+            custom_config=entity.custom_config,
             user_id=entity.user_id,
-            is_active=entity.is_active
+            is_active=entity.is_active,
+            icon=getattr(entity, 'icon', None)
         )
+        model.is_favorite = entity.is_favorite
+        return model
     
     def create(self, agent: Agent) -> Agent:
         """Create a new agent."""
@@ -79,7 +95,7 @@ class SQLAlchemyAgentRepository(AgentRepository):
         models = self.db.query(AgentModel).filter(
             AgentModel.user_id == user_id,
             AgentModel.is_active == True
-        ).order_by(AgentModel.created_at.desc()).all()
+        ).order_by(AgentModel.is_favorite.desc(), AgentModel.created_at.desc()).all()
         return [self._to_entity(model) for model in models]
     
     def update(self, agent: Agent) -> Optional[Agent]:
@@ -93,10 +109,15 @@ class SQLAlchemyAgentRepository(AgentRepository):
         
         model.name = agent.name
         model.description = agent.description
+        model.agent_type = agent.agent_type
         model.instruction = agent.instruction
         model.model = agent.model
         model.tools = agent.tools
         model.use_file_search = agent.use_file_search
+        model.workflow_config = agent.workflow_config
+        model.custom_config = agent.custom_config
+        model.is_favorite = agent.is_favorite
+        model.icon = getattr(agent, 'icon', None)
         
         self.db.commit()
         self.db.refresh(model)

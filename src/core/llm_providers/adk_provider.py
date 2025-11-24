@@ -2,12 +2,13 @@
 
 import logging
 import os
+import base64
 from typing import List, Optional, AsyncIterator
 from google.adk.agents import Agent
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 from google import genai
-from src.core.llm_provider import LLMProvider, LLMMessage
+from src.core.llm_provider import LLMProvider, LLMMessage, FilePart
 from src.config import Config
 
 logger = logging.getLogger(__name__)
@@ -52,9 +53,36 @@ class ADKProvider(LLMProvider):
             if msg.role == "system":
                 instruction += msg.content + "\n"
             else:
+                # Build parts for the message (text + files)
+                parts = [types.Part(text=msg.content)]
+                
+                # Add file parts if present
+                if msg.files:
+                    for file_part in msg.files:
+                        if file_part.type == "image":
+                            # Decode base64 image
+                            image_data = base64.b64decode(file_part.data)
+                            parts.append(types.Part(
+                                inline_data=types.Blob(
+                                    data=image_data,
+                                    mime_type=file_part.mime_type or "image/png"
+                                )
+                            ))
+                        elif file_part.type == "pdf" or file_part.mime_type == "application/pdf":
+                            # For PDFs, we need to upload to Gemini first
+                            # For now, we'll convert to text or skip
+                            logger.warning(f"PDF files not yet fully supported in ADK provider: {file_part.file_name}")
+                        else:
+                            # For other file types, try to handle as text
+                            try:
+                                text_content = base64.b64decode(file_part.data).decode('utf-8')
+                                parts.append(types.Part(text=f"\n[File: {file_part.file_name}]\n{text_content}"))
+                            except Exception as e:
+                                logger.warning(f"Could not decode file {file_part.file_name}: {e}")
+                
                 conversation.append(
                     types.Content(
-                        parts=[types.Part(text=msg.content)],
+                        parts=parts,
                         role=msg.role
                     )
                 )
@@ -69,6 +97,14 @@ class ADKProvider(LLMProvider):
         
         # Prepare tools list (callable functions)
         adk_tools = list(tools or [])
+        
+        # Log tools for debugging
+        logger.info(f"🔧 ADK Provider - Tools received: {len(adk_tools)} tools")
+        if adk_tools:
+            tool_names = [getattr(tool, '__name__', str(tool)) for tool in adk_tools]
+            logger.info(f"🔧 ADK Provider - Tool names: {tool_names}")
+        else:
+            logger.warning(f"⚠️ ADK Provider - No tools provided! tools parameter: {tools}")
         
         # Check if File Search is enabled
         # ADK doesn't support File Search directly, so we use Gemini client directly when File Search is enabled
@@ -103,9 +139,34 @@ class ADKProvider(LLMProvider):
                 else:
                     # Map "assistant" to "model" (Gemini API requirement)
                     gemini_role = "model" if msg.role == "assistant" else msg.role
+                    
+                    # Build parts for the message (text + files)
+                    parts = [types.Part(text=msg.content)]
+                    
+                    # Add file parts if present
+                    if msg.files:
+                        for file_part in msg.files:
+                            if file_part.type == "image":
+                                # Decode base64 image
+                                image_data = base64.b64decode(file_part.data)
+                                parts.append(types.Part(
+                                    inline_data=types.Blob(
+                                        data=image_data,
+                                        mime_type=file_part.mime_type or "image/png"
+                                    )
+                                ))
+                            elif file_part.type == "pdf" or file_part.mime_type == "application/pdf":
+                                logger.warning(f"PDF files not yet fully supported in ADK provider: {file_part.file_name}")
+                            else:
+                                try:
+                                    text_content = base64.b64decode(file_part.data).decode('utf-8')
+                                    parts.append(types.Part(text=f"\n[File: {file_part.file_name}]\n{text_content}"))
+                                except Exception as e:
+                                    logger.warning(f"Could not decode file {file_part.file_name}: {e}")
+                    
                     gemini_messages.append(
                         types.Content(
-                            parts=[types.Part(text=msg.content)],
+                            parts=parts,
                             role=gemini_role
                         )
                     )
@@ -140,6 +201,7 @@ class ADKProvider(LLMProvider):
             return
         
         # No File Search - use ADK as normal
+        logger.info(f"🔧 Creating ADK Agent with {len(adk_tools)} tools")
         agent = Agent(
             model=model,
             name=agent_name,
@@ -147,6 +209,7 @@ class ADKProvider(LLMProvider):
             instruction=instruction,
             tools=adk_tools  # Only callable functions here
         )
+        logger.info(f"✅ ADK Agent created successfully with tools: {[getattr(t, '__name__', str(t)) for t in adk_tools]}")
         
         # Inject context if available (for conversation history)
         # This is done by the caller in agent_chat_routes.py, but we check here too
@@ -198,11 +261,22 @@ class ADKProvider(LLMProvider):
                 pass  # Session might already exist
         
         # Run agent (File Search is already configured in Agent)
+        # The ADK Runner automatically handles tool calls when tools are provided to the Agent
         async for event in runner.run_async(
             user_id=str(user_id),
             session_id=session_id,
             new_message=last_message
         ):
+            # Log event type for debugging
+            event_type = type(event).__name__
+            logger.debug(f"🔍 ADK Event type: {event_type}, event: {event}")
+            
+            # Check for tool calls (ADK should handle these automatically, but we log them)
+            if hasattr(event, 'function_calls') or hasattr(event, 'tool_calls'):
+                logger.info(f"🔧 Tool call detected in event: {event}")
+            if hasattr(event, 'function_call'):
+                logger.info(f"🔧 Function call detected: {event.function_call}")
+            
             # Extract text from events
             if hasattr(event, 'content') and event.content:
                 for content in event.content if isinstance(event.content, list) else [event.content]:

@@ -27,6 +27,59 @@ from src.infrastructure.database.entity_mapper import agent_entity_to_model
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
+@router.get("/types", response_model=dict)
+async def get_agent_types():
+    """Get available agent types with descriptions.
+    
+    Returns information about all available agent types that can be created.
+    Based on Google ADK documentation.
+    """
+    return {
+        "types": [
+            {
+                "id": "llm",
+                "name": "LLM Agent",
+                "description": "Utiliza Large Language Models (LLMs) como motor principal para entender linguagem natural, raciocinar, planejar e gerar respostas. Ideal para tarefas flexíveis centradas em linguagem.",
+                "icon": "sparkles",
+                "features": ["reasoning", "generation", "tool_use"],
+                "requires": ["instruction", "model"]
+            },
+            {
+                "id": "sequential",
+                "name": "Sequential Workflow",
+                "description": "Controla a execução de agentes em sequência predefinida. Perfeito para processos estruturados que precisam de execução previsível passo a passo.",
+                "icon": "arrow-right",
+                "features": ["deterministic", "structured", "orchestration"],
+                "requires": ["workflow_config.agents"]
+            },
+            {
+                "id": "loop",
+                "name": "Loop Workflow",
+                "description": "Executa um agente repetidamente até que uma condição seja satisfeita ou um limite de iterações seja atingido. Útil para processos iterativos de refinamento.",
+                "icon": "arrow-path",
+                "features": ["iterative", "conditional", "refinement"],
+                "requires": ["workflow_config.agent"]
+            },
+            {
+                "id": "parallel",
+                "name": "Parallel Workflow",
+                "description": "Executa múltiplos agentes simultaneamente e combina seus resultados. Mais rápido que execução sequencial, ideal para análises multi-perspectiva.",
+                "icon": "squares",
+                "features": ["concurrent", "fast", "multi_perspective"],
+                "requires": ["workflow_config.agents"]
+            },
+            {
+                "id": "custom",
+                "name": "Custom Agent",
+                "description": "Permite implementar lógica única com código personalizado. Flexibilidade total para integrações específicas e fluxos de controle customizados.",
+                "icon": "code",
+                "features": ["flexible", "custom_logic", "specialized"],
+                "requires": ["custom_config"]
+            }
+        ]
+    }
+
+
 def sync_agents_to_files_sync():
     """Sync agents from database to files (synchronous, runs in background)."""
     try:
@@ -47,17 +100,30 @@ async def create_agent(
     user_id: int = Depends(get_current_user_id),
     use_case: CreateAgentUseCase = Depends(get_create_agent_use_case)
 ):
-    """Create a new agent for the current user."""
+    """Create a new agent for the current user.
+    
+    Supports multiple agent types:
+    - llm: LLM agent with tools (default)
+    - sequential: Workflow agent that executes agents in sequence
+    - loop: Workflow agent that loops until condition is met
+    - parallel: Workflow agent that executes agents in parallel
+    - custom: Custom agent with user-defined logic
+    """
     try:
         # Use case handles validation and creation
         agent_entity = use_case.execute(
             user_id=user_id,
             name=agent_data.name,
             description=agent_data.description,
+            agent_type=agent_data.agent_type or "llm",
             instruction=agent_data.instruction,
             model=agent_data.model,
             tools=agent_data.tools,
-            use_file_search=agent_data.use_file_search if agent_data.use_file_search is not None else False
+            use_file_search=agent_data.use_file_search if agent_data.use_file_search is not None else False,
+            workflow_config=agent_data.workflow_config,
+            custom_config=agent_data.custom_config,
+            is_favorite=agent_data.is_favorite if agent_data.is_favorite is not None else False,
+            icon=agent_data.icon
         )
         
         # Convert to model for backward compatibility with schemas
@@ -81,13 +147,41 @@ async def create_agent(
 
 @router.get("", response_model=List[AgentResponse])
 async def get_agents(
+    limit: int = 20,
+    offset: int = 0,
     user_id: int = Depends(get_current_user_id),
     use_case: GetUserAgentsUseCase = Depends(get_get_user_agents_use_case)
 ):
-    """Get all agents for the current user."""
+    """Get agents for the current user with pagination.
+    
+    Args:
+        limit: Maximum number of agents to return (default: 20, max: 100)
+        offset: Number of agents to skip (default: 0)
+        user_id: Current user ID (from auth)
+    
+    Returns:
+        List of agents, ordered by is_favorite (favorites first), then by created_at (newest first)
+    """
+    # Validate limit
+    if limit < 1:
+        limit = 20
+    if limit > 100:
+        limit = 100
+    
     agent_entities = use_case.execute(user_id)
+    
+    # Sort: favorites first, then by created_at (newest first)
+    sorted_entities = sorted(
+        agent_entities,
+        key=lambda a: (not a.is_favorite, -(a.created_at.timestamp() if a.created_at else 0)),
+        reverse=False
+    )
+    
+    # Apply pagination
+    paginated_entities = sorted_entities[offset:offset + limit]
+    
     # Convert entities to models for backward compatibility
-    agents = [agent_entity_to_model(entity) for entity in agent_entities]
+    agents = [agent_entity_to_model(entity) for entity in paginated_entities]
     return agents
 
 
@@ -112,17 +206,26 @@ async def update_agent(
     user_id: int = Depends(get_current_user_id),
     use_case: UpdateAgentUseCase = Depends(get_update_agent_use_case)
 ):
-    """Update an agent."""
+    """Update an agent.
+    
+    Supports updating all agent types (llm, sequential, loop, parallel, custom).
+    Only provided fields will be updated.
+    """
     # Use case handles validation and update
     updated_entity = use_case.execute(
         agent_id=agent_id,
         user_id=user_id,
         name=agent_data.name,
         description=agent_data.description,
+        agent_type=agent_data.agent_type,
         instruction=agent_data.instruction,
         model=agent_data.model,
         tools=agent_data.tools,
-        use_file_search=agent_data.use_file_search
+        use_file_search=agent_data.use_file_search,
+        workflow_config=agent_data.workflow_config,
+        custom_config=agent_data.custom_config,
+        is_favorite=agent_data.is_favorite,
+        icon=agent_data.icon
     )
     
     # Convert entity to model for backward compatibility

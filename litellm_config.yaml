@@ -1,14 +1,35 @@
 # LiteLLM Configuration
 # This file defines the model routing and configuration for LiteLLM proxy
 # Documentation: https://docs.litellm.ai/docs/
+#
+# IMPORTANTE: Este arquivo é usado para configurações avançadas do LiteLLM (fallbacks, load balancing, etc.)
+# A lista de modelos suportados é definida em: src/core/llm_providers/litellm_provider.py
+# 
+# Para adicionar novos modelos:
+# 1. Adicione o modelo em litellm_provider.py (método _get_supported_models)
+# 2. Opcionalmente, adicione aqui para configurações avançadas (fallbacks, rate limits, etc.)
+#
+# O código Python sempre tem precedência para validação de modelos suportados.
 
 model_list:
-  # Google Gemini Models (via Vertex AI or direct API)
+  # Google Gemini Models (via direct API - Vertex AI credentials are temporarily removed)
+  # Latest models (2025)
+  - model_name: gemini-3-pro
+    litellm_params:
+      model: gemini/gemini-3-pro
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GOOGLE_API_KEY
+  
   - model_name: gemini-2.5-flash
     litellm_params:
       model: gemini/gemini-2.5-flash
       api_key: os.environ/GOOGLE_API_KEY
   
+  # Experimental models
   - model_name: gemini-2.0-flash-exp
     litellm_params:
       model: gemini/gemini-2.0-flash-exp
@@ -19,9 +40,15 @@ model_list:
       model: gemini/gemini-2.0-flash-thinking-exp
       api_key: os.environ/GOOGLE_API_KEY
   
+  # Stable models
   - model_name: gemini-1.5-pro
     litellm_params:
       model: gemini/gemini-1.5-pro
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-1.5-pro-latest
+    litellm_params:
+      model: gemini/gemini-1.5-pro-latest
       api_key: os.environ/GOOGLE_API_KEY
   
   - model_name: gemini-1.5-flash
@@ -32,6 +59,11 @@ model_list:
   - model_name: gemini-1.5-flash-8b
     litellm_params:
       model: gemini/gemini-1.5-flash-8b
+      api_key: os.environ/GOOGLE_API_KEY
+  
+  - model_name: gemini-1.0-pro
+    litellm_params:
+      model: gemini/gemini-1.0-pro
       api_key: os.environ/GOOGLE_API_KEY
   
   # OpenAI Models
@@ -55,6 +87,37 @@ model_list:
       model: openai/gpt-3.5-turbo
       api_key: os.environ/OPENAI_API_KEY
   
+  - model_name: gpt-4
+    litellm_params:
+      model: openai/gpt-4
+      api_key: os.environ/OPENAI_API_KEY
+  
+  # Anthropic Claude Models
+  - model_name: claude-3-opus-20240229
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+  
+  - model_name: claude-3-sonnet-20240229
+    litellm_params:
+      model: anthropic/claude-3-sonnet-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+  
+  - model_name: claude-3-haiku-20240307
+    litellm_params:
+      model: anthropic/claude-3-haiku-20240307
+      api_key: os.environ/ANTHROPIC_API_KEY
+  
+  - model_name: claude-2.1
+    litellm_params:
+      model: anthropic/claude-2.1
+      api_key: os.environ/ANTHROPIC_API_KEY
+  
+  - model_name: claude-2
+    litellm_params:
+      model: anthropic/claude-2
+      api_key: os.environ/ANTHROPIC_API_KEY
+  
   # Ollama Models (local)
   # Note: Requires Ollama to be running locally
   # Start Ollama: ollama serve
@@ -68,9 +131,19 @@ model_list:
       model: ollama/llama3
       api_base: os.environ/OLLAMA_API_BASE_URL
   
+  - model_name: ollama/llama3.1
+    litellm_params:
+      model: ollama/llama3.1
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
   - model_name: ollama/mistral
     litellm_params:
       model: ollama/mistral
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/mixtral
+    litellm_params:
+      model: ollama/mixtral
       api_base: os.environ/OLLAMA_API_BASE_URL
   
   - model_name: ollama/codellama
@@ -83,9 +156,29 @@ model_list:
       model: ollama/gemma
       api_base: os.environ/OLLAMA_API_BASE_URL
   
+  - model_name: ollama/gemma2
+    litellm_params:
+      model: ollama/gemma2
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
   - model_name: ollama/phi
     litellm_params:
       model: ollama/phi
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/phi3
+    litellm_params:
+      model: ollama/phi3
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/qwen
+    litellm_params:
+      model: ollama/qwen
+      api_base: os.environ/OLLAMA_API_BASE_URL
+  
+  - model_name: ollama/deepseek-coder
+    litellm_params:
+      model: ollama/deepseek-coder
       api_base: os.environ/OLLAMA_API_BASE_URL
 
 # General Settings
@@ -127,5 +220,8 @@ general_settings:
 # Environment variables required:
 # - GOOGLE_API_KEY: For Gemini models
 # - OPENAI_API_KEY: For OpenAI models
+# - ANTHROPIC_API_KEY: For Anthropic Claude models (optional)
 # - OLLAMA_API_BASE_URL: For Ollama models (default: http://localhost:11434)
+#
+# Note: Configure these in your .env file
 

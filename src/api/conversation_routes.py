@@ -19,14 +19,39 @@ from src.api.helpers import create_error_response
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 
-@router.get("/sessions", response_model=List[str])
+class SessionsResponse(BaseModel):
+    """Response model for paginated sessions."""
+    sessions: List[str]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+@router.get("/sessions", response_model=SessionsResponse)
 async def get_user_sessions(
+    limit: Optional[int] = Query(20, ge=1, le=100, description="Number of sessions to return"),
+    offset: int = Query(0, ge=0, description="Number of sessions to skip"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """Get all session IDs for the current user."""
-    sessions = HybridConversationService.get_user_sessions(user_id, db=db)
-    return sessions
+    """Get paginated session IDs for the current user."""
+    sessions, total = HybridConversationService.get_user_sessions(
+        user_id=user_id,
+        db=db,
+        limit=limit,
+        offset=offset
+    )
+    # Calculate has_more: true if there are more sessions beyond current page
+    has_more = (offset + len(sessions)) < total
+    
+    return SessionsResponse(
+        sessions=sessions,
+        total=total,
+        limit=limit or 20,
+        offset=offset,
+        has_more=has_more
+    )
 
 
 @router.get("/sessions/{session_id}", response_model=ConversationHistory)

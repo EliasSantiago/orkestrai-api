@@ -20,6 +20,9 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    avatar_url = Column(String(500), nullable=True)  # URL to user's avatar image
+    occupation = Column(String(255), nullable=True)  # User's occupation/job title
+    bio = Column(Text, nullable=True)  # User's bio/about me
     
     # User preferences (theme, language, layout, etc)
     # Stored as JSONB for flexibility and better performance
@@ -36,15 +39,28 @@ class User(Base):
 
 
 class Agent(Base):
-    """Agent model following ADK structure."""
+    """Agent model following ADK structure.
+    
+    Supports multiple agent types:
+    - llm: LLM agent with tools (default)
+    - sequential: Workflow agent that executes agents in sequence
+    - loop: Workflow agent that loops until condition is met
+    - parallel: Workflow agent that executes agents in parallel
+    - custom: Custom agent with user-defined logic
+    """
     
     __tablename__ = "agents"
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    instruction = Column(Text, nullable=False)
-    model = Column(String(100), nullable=False, default="gemini-2.0-flash-exp")
+    
+    # Agent type: llm, sequential, loop, parallel, custom
+    agent_type = Column(String(50), nullable=False, default="llm", index=True)
+    
+    # LLM Agent fields
+    instruction = Column(Text, nullable=True)  # Made nullable for workflow agents
+    model = Column(String(100), nullable=True, default="gemini-2.0-flash-exp")  # Made nullable for workflow agents
     
     # Tools are stored as JSON array of tool names
     # Tools are imported from the tools/ directory
@@ -55,17 +71,30 @@ class Agent(Base):
     # If False, agent will not use File Search even if stores are available
     use_file_search = Column(Boolean, default=False, nullable=False)
     
+    # Workflow Agent configuration (for sequential, loop, parallel)
+    # Stores agent IDs or names to execute, conditions, etc.
+    workflow_config = Column(JSON, nullable=True)
+    # Example for sequential: {"agents": ["agent1", "agent2", "agent3"]}
+    # Example for loop: {"agent": "agent1", "condition": "...", "max_iterations": 5}
+    # Example for parallel: {"agents": ["agent1", "agent2", "agent3"], "merge_strategy": "concat"}
+    
+    # Custom Agent code/configuration
+    custom_config = Column(JSON, nullable=True)
+    # Example: {"code": "...", "runtime": "python", "entry_point": "main"}
+    
     # Owner relationship
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     owner = relationship("User", back_populates="agents")
     
     # Metadata
     is_active = Column(Boolean, default=True)
+    is_favorite = Column(Boolean, default=False, nullable=False)  # Favorite flag for quick access
+    icon = Column(String(100), nullable=True)  # Icon name from lucide-react library
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def __repr__(self):
-        return f"<Agent(id={self.id}, name={self.name}, user_id={self.user_id})>"
+        return f"<Agent(id={self.id}, name={self.name}, type={self.agent_type}, user_id={self.user_id})>"
 
 
 class PasswordResetToken(Base):
