@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-por \
     tesseract-ocr-eng \
     ffmpeg \
-    nano \                  # ← nano adicionado aqui
+    nano \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
