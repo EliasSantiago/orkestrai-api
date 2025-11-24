@@ -128,18 +128,25 @@ jobs:
             done < .env
             set +a
             
-            # Salvar imagem atual para rollback
-            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null || docker images "${IMAGE_NAME}:latest" --format "{{.Repository}}:{{.Tag}}" | head -1 || echo "none")
-            echo "📦 Current image: $CURRENT_IMAGE"
+            # Salvar imagem atual para rollback (limpar quebras de linha)
+            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null | tr -d '\n\r' || docker images "${IMAGE_NAME}:latest" --format "{{.Repository}}:{{.Tag}}" | head -1 | tr -d '\n\r' || echo "none")
+            CURRENT_IMAGE=$(echo "$CURRENT_IMAGE" | xargs)  # Remove espaços extras
+            echo "📦 Current image: '$CURRENT_IMAGE'"
             
             # Função de rollback
             rollback() {
               echo "❌ Deployment failed! Starting rollback..."
-              if [ "$CURRENT_IMAGE" != "none" ] && [ -n "$CURRENT_IMAGE" ]; then
-                echo "🔄 Restoring previous image: $CURRENT_IMAGE"
-                docker tag "$CURRENT_IMAGE" "${IMAGE_NAME}:latest" || true
-                docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api || true
-                echo "✅ Rollback completed"
+              if [ "$CURRENT_IMAGE" != "none" ] && [ -n "$CURRENT_IMAGE" ] && [ "$CURRENT_IMAGE" != "" ]; then
+                echo "🔄 Restoring previous image: '$CURRENT_IMAGE'"
+                # Limpar quebras de linha antes de usar
+                CLEAN_IMAGE=$(echo "$CURRENT_IMAGE" | tr -d '\n\r' | xargs)
+                if [ -n "$CLEAN_IMAGE" ] && [ "$CLEAN_IMAGE" != "none" ]; then
+                  docker tag "$CLEAN_IMAGE" "${IMAGE_NAME}:latest" 2>/dev/null || true
+                  docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api 2>/dev/null || true
+                  echo "✅ Rollback completed"
+                else
+                  echo "⚠️  Invalid image name for rollback"
+                fi
               else
                 echo "⚠️  No previous image to rollback to"
               fi

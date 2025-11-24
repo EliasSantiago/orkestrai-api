@@ -31,8 +31,24 @@ MAX_TRIES=30
 TRIES=0
 LAST_ERROR=""
 
+# Verificar se PYTHONPATH está configurado
+export PYTHONPATH=/app:${PYTHONPATH:-}
+
 while [ $TRIES -lt $MAX_TRIES ]; do
-    ERROR_OUTPUT=$(python3 -c "from src.database import test_connection; import sys; sys.exit(0 if test_connection() else 1)" 2>&1)
+    # Tentar conectar ao banco
+    ERROR_OUTPUT=$(python3 -c "
+import sys
+sys.path.insert(0, '/app')
+try:
+    from src.database import test_connection
+    if test_connection():
+        sys.exit(0)
+    else:
+        sys.exit(1)
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1)
     EXIT_CODE=$?
     
     if [ $EXIT_CODE -eq 0 ]; then
@@ -42,17 +58,27 @@ while [ $TRIES -lt $MAX_TRIES ]; do
         LAST_ERROR="$ERROR_OUTPUT"
         TRIES=$((TRIES + 1))
         echo "  Tentativa $TRIES/$MAX_TRIES..."
-        sleep 2
+        if [ $TRIES -lt $MAX_TRIES ]; then
+            sleep 2
+        fi
     fi
 done
 
 if [ $TRIES -eq $MAX_TRIES ]; then
-    echo -e "${RED}✗ Timeout: PostgreSQL não respondeu${NC}"
+    echo -e "${RED}✗ Timeout: PostgreSQL não respondeu após ${MAX_TRIES} tentativas${NC}"
     echo -e "${RED}Último erro:${NC}"
     echo "$LAST_ERROR"
     echo ""
-    echo "🔍 Verificando conexão..."
-    python3 -c "from src.config import Config; print(f'DATABASE_URL: {Config.DATABASE_URL}')" 2>&1 || true
+    echo "🔍 Verificando configuração..."
+    python3 -c "
+import sys
+sys.path.insert(0, '/app')
+try:
+    from src.config import Config
+    print(f'DATABASE_URL: {Config.DATABASE_URL[:50]}...')
+except Exception as e:
+    print(f'Erro ao carregar config: {e}')
+" 2>&1 || true
     exit 1
 fi
 
@@ -61,12 +87,30 @@ echo "1️⃣ Criando tabelas via SQLAlchemy ORM..."
 echo "----------------------------------------"
 
 # Executar init_db para criar tabelas via SQLAlchemy
-python3 src/init_db.py
-
-if [ $? -eq 0 ]; then
+echo "  Executando init_db.py..."
+if python3 -c "
+import sys
+sys.path.insert(0, '/app')
+from src.init_db import init_db
+init_db()
+print('✓ init_db concluído')
+"; then
     echo -e "${GREEN}✓ Tabelas criadas com sucesso${NC}"
 else
     echo -e "${RED}✗ Erro ao criar tabelas${NC}"
+    echo "🔍 Detalhes do erro:"
+    python3 -c "
+import sys
+sys.path.insert(0, '/app')
+try:
+    from src.init_db import init_db
+    init_db()
+except Exception as e:
+    print(f'Erro: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+" 2>&1 || true
     exit 1
 fi
 
