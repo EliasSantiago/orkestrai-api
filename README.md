@@ -274,18 +274,6 @@ pytest --cov=src tests/
 - **[API Reference](docs/api-reference.md)** - Documentação completa da API
 - **[MCP Setup](docs/MCP_SETUP.md)** - Model Context Protocol
 
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch: `git checkout -b feature/nova-feature`
-3. Commit: `git commit -m 'Add nova feature'`
-4. Push: `git push origin feature/nova-feature`
-5. Abra um Pull Request
-
-## 📝 Licença
-
-Este projeto está sob a licença especificada no arquivo LICENSE.
-
 ## 🆘 Suporte
 
 - Issues: https://github.com/EliasSantiago/orkestrai-api/issues
