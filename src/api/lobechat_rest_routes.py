@@ -237,9 +237,14 @@ async def rank_sessions(
     
     result = []
     for idx, session in enumerate(sessions, start=(offset or 0) + 1):
-        # Get title from first message or use default
-        first_message = first_messages.get(session.session_id, '')
-        title = first_message[:50] if first_message else 'Nova conversa'
+        # Get title from session_metadata if available, otherwise from first message
+        metadata = session.session_metadata or {}
+        title = metadata.get("title")
+        
+        if not title:
+            # Fallback to first message or use default
+            first_message = first_messages.get(session.session_id, '')
+            title = first_message[:50] if first_message else 'Nova conversa'
         
         result.append({
             "id": session.session_id,
