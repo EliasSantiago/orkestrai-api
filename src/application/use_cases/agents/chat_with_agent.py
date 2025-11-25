@@ -649,8 +649,10 @@ class ChatWithAgentUseCase:
         # Map aliases to official model names
         model_aliases = {
             "gemini/gemini-3-pro": "gemini/gemini-3-pro-preview",  # Official name is gemini-3-pro-preview
-            "gemini/gemini-2.5-flash": "gemini/gemini-2.0-flash-exp",  # 2.5 not available, use 2.0
-            "gemini/gemini-2.5-pro": "gemini/gemini-1.5-pro-latest",  # 2.5 not available, use 1.5 pro
+            "gemini/gemini-2.5-flash": "gemini/gemini-1.5-flash",  # 2.5 not available in v1beta, use stable 1.5
+            "gemini/gemini-2.5-pro": "gemini/gemini-1.5-pro",  # 2.5 not available in v1beta, use stable 1.5
+            "gemini/gemini-2.0-flash-exp": "gemini/gemini-1.5-flash",  # 2.0 experimental not available, use stable 1.5
+            "gemini/gemini-1.5-pro-latest": "gemini/gemini-1.5-pro",  # Use stable version instead of latest
         }
         return model_aliases.get(model, model)
     
@@ -668,9 +670,9 @@ class ChatWithAgentUseCase:
         # Default fallbacks based on provider
         if model.startswith("gemini/"):
             return [
-                "gemini/gemini-2.0-flash-exp",
-                "gemini/gemini-1.5-flash",
-                "gemini/gemini-1.5-pro-latest"
+                "gemini/gemini-1.5-flash",  # Most reliable and fastest
+                "gemini/gemini-1.5-pro",    # More capable but slower
+                "openai/gpt-4o-mini"        # Ultimate fallback to OpenAI
             ]
         elif model.startswith("openai/"):
             return [
