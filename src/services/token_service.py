@@ -301,10 +301,17 @@ class TokenService:
         usage_percentage = min(100.0, (tokens_used / tokens_limit * 100) if tokens_limit > 0 else 0)
         
         # Get usage history for current month
-        history = self.db.query(TokenUsageHistory).filter(
-            TokenUsageHistory.user_id == user_id,
-            TokenUsageHistory.created_at >= balance.last_reset_at
-        ).all()
+        # Handle case where last_reset_at might be None
+        if balance.last_reset_at:
+            history = self.db.query(TokenUsageHistory).filter(
+                TokenUsageHistory.user_id == user_id,
+                TokenUsageHistory.created_at >= balance.last_reset_at
+            ).all()
+        else:
+            # If no reset date, get all history for this user
+            history = self.db.query(TokenUsageHistory).filter(
+                TokenUsageHistory.user_id == user_id
+            ).all()
         
         # Calculate total cost
         total_cost = sum(float(h.cost_usd or 0) for h in history)
