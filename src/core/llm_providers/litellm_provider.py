@@ -560,9 +560,9 @@ class LiteLLMProvider(LLMProvider):
                 if "api_base" in litellm_params:
                     del litellm_params["api_base"]
                 
-                # Ensure we're using the direct Gemini API endpoint with v1 (not v1beta)
-                # Force v1 API version by setting custom API base
-                litellm_params["api_base"] = "https://generativelanguage.googleapis.com/v1"
+                # Ensure we're using the direct Gemini API endpoint
+                # Use v1beta for models with tool support (system_instruction, tools, toolConfig)
+                # Do not set api_base - let LiteLLM handle it automatically
                 
                 # For Gemini 3 Pro, add thinking_level parameter (default: high)
                 # According to docs: https://ai.google.dev/gemini-api/docs/gemini-3
