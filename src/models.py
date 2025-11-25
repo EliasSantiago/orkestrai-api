@@ -122,6 +122,7 @@ class Agent(Base):
     # Metadata
     is_active = Column(Boolean, default=True)
     is_favorite = Column(Boolean, default=False, nullable=False)  # Favorite flag for quick access
+    is_public = Column(Boolean, default=False, nullable=False)  # If True, agent is visible to all users
     icon = Column(String(100), nullable=True)  # Icon name from lucide-react library
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

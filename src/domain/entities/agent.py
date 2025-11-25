@@ -41,6 +41,7 @@ class Agent:
     user_id: int = 0
     is_active: bool = True
     is_favorite: bool = False  # Favorite flag for quick access
+    is_public: bool = False  # If True, agent is visible to all users
     icon: Optional[str] = None  # Icon name from lucide-react library
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

@@ -29,6 +29,7 @@ class SQLAlchemyAgentRepository(AgentRepository):
             user_id=model.user_id,
             is_active=model.is_active,
             is_favorite=getattr(model, 'is_favorite', False),
+            is_public=getattr(model, 'is_public', False),
             icon=getattr(model, 'icon', None),
             created_at=model.created_at,
             updated_at=model.updated_at
@@ -52,6 +53,7 @@ class SQLAlchemyAgentRepository(AgentRepository):
                 model.workflow_config = entity.workflow_config
                 model.custom_config = entity.custom_config
                 model.is_favorite = entity.is_favorite
+                model.is_public = getattr(entity, 'is_public', False)
                 model.icon = getattr(entity, 'icon', None)
                 return model
         
@@ -71,6 +73,7 @@ class SQLAlchemyAgentRepository(AgentRepository):
             icon=getattr(entity, 'icon', None)
         )
         model.is_favorite = entity.is_favorite
+        model.is_public = getattr(entity, 'is_public', False)
         return model
     
     def create(self, agent: Agent) -> Agent:
@@ -82,18 +85,29 @@ class SQLAlchemyAgentRepository(AgentRepository):
         return self._to_entity(model)
     
     def get_by_id(self, agent_id: int, user_id: int) -> Optional[Agent]:
-        """Get agent by ID (only if owned by user)."""
+        """Get agent by ID (if owned by user OR public)."""
+        from sqlalchemy import or_
+        
         model = self.db.query(AgentModel).filter(
             AgentModel.id == agent_id,
-            AgentModel.user_id == user_id,
+            or_(
+                AgentModel.user_id == user_id,  # User's own agent
+                AgentModel.is_public == True    # Public agent
+            ),
             AgentModel.is_active == True
         ).first()
         return self._to_entity(model) if model else None
     
     def get_by_user(self, user_id: int) -> List[Agent]:
-        """Get all active agents for a user."""
+        """Get all active agents for a user (owned + public agents)."""
+        from sqlalchemy import or_
+        
+        # Get agents owned by user OR public agents
         models = self.db.query(AgentModel).filter(
-            AgentModel.user_id == user_id,
+            or_(
+                AgentModel.user_id == user_id,  # User's own agents
+                AgentModel.is_public == True    # Public agents from other users
+            ),
             AgentModel.is_active == True
         ).order_by(AgentModel.is_favorite.desc(), AgentModel.created_at.desc()).all()
         return [self._to_entity(model) for model in models]
@@ -117,6 +131,7 @@ class SQLAlchemyAgentRepository(AgentRepository):
         model.workflow_config = agent.workflow_config
         model.custom_config = agent.custom_config
         model.is_favorite = agent.is_favorite
+        model.is_public = getattr(agent, 'is_public', False)
         model.icon = getattr(agent, 'icon', None)
         
         self.db.commit()

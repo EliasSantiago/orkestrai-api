@@ -164,6 +164,7 @@ class AgentCreate(BaseModel):
     
     # Common fields
     is_favorite: Optional[bool] = False  # Mark as favorite for quick access
+    is_public: Optional[bool] = False  # If True, agent is visible to all users
     icon: Optional[str] = None  # Icon name from lucide-react library
     
     @model_validator(mode='after')
@@ -342,6 +343,7 @@ class AgentUpdate(BaseModel):
     
     # Common fields
     is_favorite: Optional[bool] = None  # Mark/unmark as favorite
+    is_public: Optional[bool] = None  # Make agent public/private
     icon: Optional[str] = None  # Icon name from lucide-react library
     
     class Config:
@@ -406,6 +408,7 @@ class AgentResponse(BaseModel):
     
     # Common fields
     is_favorite: bool  # Favorite flag for quick access
+    is_public: bool  # If True, agent is visible to all users
     icon: Optional[str]  # Icon name from lucide-react library
     user_id: int
     created_at: datetime
