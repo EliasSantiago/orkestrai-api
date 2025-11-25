@@ -33,6 +33,7 @@ class UpdateAgentUseCase:
         workflow_config: Optional[Dict[str, Any]] = None,
         custom_config: Optional[Dict[str, Any]] = None,
         is_favorite: Optional[bool] = None,
+        is_public: Optional[bool] = None,
         icon: Optional[str] = None
     ) -> Agent:
         """
@@ -94,6 +95,8 @@ class UpdateAgentUseCase:
             agent.custom_config = custom_config
         if is_favorite is not None:
             agent.is_favorite = is_favorite
+        if is_public is not None:
+            agent.is_public = is_public
         if icon is not None:
             agent.icon = icon
         

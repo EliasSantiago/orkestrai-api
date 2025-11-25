@@ -123,6 +123,7 @@ async def create_agent(
             workflow_config=agent_data.workflow_config,
             custom_config=agent_data.custom_config,
             is_favorite=agent_data.is_favorite if agent_data.is_favorite is not None else False,
+            is_public=agent_data.is_public if agent_data.is_public is not None else False,
             icon=agent_data.icon
         )
         
@@ -225,6 +226,7 @@ async def update_agent(
         workflow_config=agent_data.workflow_config,
         custom_config=agent_data.custom_config,
         is_favorite=agent_data.is_favorite,
+        is_public=agent_data.is_public,
         icon=agent_data.icon
     )
     

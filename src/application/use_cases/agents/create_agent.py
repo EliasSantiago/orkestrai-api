@@ -31,6 +31,7 @@ class CreateAgentUseCase:
         workflow_config: Optional[Dict[str, Any]] = None,
         custom_config: Optional[Dict[str, Any]] = None,
         is_favorite: bool = False,
+        is_public: bool = False,
         icon: Optional[str] = None
     ) -> Agent:
         """
@@ -77,6 +78,7 @@ class CreateAgentUseCase:
             workflow_config=workflow_config or {},
             custom_config=custom_config or {},
             is_favorite=is_favorite,
+            is_public=is_public,
             icon=icon,
             user_id=user_id
         )
