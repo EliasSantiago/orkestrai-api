@@ -670,8 +670,7 @@ class ChatWithAgentUseCase:
             return [
                 "gemini/gemini-2.0-flash-exp",
                 "gemini/gemini-1.5-flash",
-                "gemini/gemini-1.5-pro-latest",
-                "gemini/gemini-1.5-flash-8b"
+                "gemini/gemini-1.5-pro-latest"
             ]
         elif model.startswith("openai/"):
             return [
