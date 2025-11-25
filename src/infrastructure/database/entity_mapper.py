@@ -35,6 +35,7 @@ def agent_entity_to_model(entity: Agent) -> AgentModel:
         user_id=entity.user_id,
         is_active=entity.is_active,
         is_favorite=entity.is_favorite,
+        is_public=entity.is_public,
         icon=getattr(entity, 'icon', None),
         created_at=entity.created_at,
         updated_at=entity.updated_at
