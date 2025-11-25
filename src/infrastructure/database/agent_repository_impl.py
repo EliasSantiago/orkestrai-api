@@ -70,10 +70,10 @@ class SQLAlchemyAgentRepository(AgentRepository):
             custom_config=entity.custom_config,
             user_id=entity.user_id,
             is_active=entity.is_active,
+            is_favorite=entity.is_favorite,
+            is_public=entity.is_public,
             icon=getattr(entity, 'icon', None)
         )
-        model.is_favorite = entity.is_favorite
-        model.is_public = getattr(entity, 'is_public', False)
         return model
     
     def create(self, agent: Agent) -> Agent:
