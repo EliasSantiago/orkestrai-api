@@ -1,13 +1,36 @@
 """Database models for users and agents."""
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, BigInteger, JSON, Float, Numeric
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from src.database import Base
 from cryptography.fernet import Fernet
 import os
 import base64
+
+
+class Plan(Base):
+    """Subscription plan model for token limits."""
+    
+    __tablename__ = "plans"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)  # free, pro, plus
+    description = Column(Text, nullable=True)
+    price_month = Column(Numeric(10, 2), nullable=False, default=0.0)  # Monthly price in USD
+    price_year = Column(Numeric(10, 2), nullable=False, default=0.0)  # Yearly price in USD
+    monthly_token_limit = Column(BigInteger, nullable=False)  # Monthly token limit
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship with users
+    users = relationship("User", back_populates="plan")
+    
+    def __repr__(self):
+        return f"<Plan(id={self.id}, name={self.name}, monthly_token_limit={self.monthly_token_limit})>"
 
 
 class User(Base):
@@ -24,6 +47,10 @@ class User(Base):
     occupation = Column(String(255), nullable=True)  # User's occupation/job title
     bio = Column(Text, nullable=True)  # User's bio/about me
     
+    # Plan relationship
+    plan_id = Column(Integer, ForeignKey("plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    plan = relationship("Plan", back_populates="users")
+    
     # User preferences (theme, language, layout, etc)
     # Stored as JSONB for flexibility and better performance
     preferences = Column(JSONB, nullable=True, default=dict)
@@ -33,6 +60,12 @@ class User(Base):
     
     # Relationship with agents
     agents = relationship("Agent", back_populates="owner", cascade="all, delete-orphan")
+    
+    # Relationship with token balance
+    token_balance = relationship("UserTokenBalance", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    
+    # Relationship with token usage history
+    token_usage_history = relationship("TokenUsageHistory", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, name={self.name}, email={self.email})>"
@@ -266,4 +299,70 @@ class FileSearchFile(Base):
     
     def __repr__(self):
         return f"<FileSearchFile(id={self.id}, store_id={self.store_id}, display_name={self.display_name}, status={self.status})>"
+
+
+class UserTokenBalance(Base):
+    """
+    User token balance model for tracking monthly token usage.
+    
+    Each user has one active balance record per month.
+    The balance resets at the beginning of each month.
+    """
+    
+    __tablename__ = "user_token_balances"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    
+    # Token tracking
+    tokens_used_this_month = Column(BigInteger, default=0, nullable=False)  # Tokens used in current month
+    month = Column(Integer, nullable=False, index=True)  # Month (1-12)
+    year = Column(Integer, nullable=False, index=True)  # Year (e.g., 2025)
+    
+    # Metadata
+    last_reset_at = Column(DateTime, default=datetime.utcnow)  # When balance was last reset
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="token_balance")
+    
+    def __repr__(self):
+        return f"<UserTokenBalance(id={self.id}, user_id={self.user_id}, tokens_used={self.tokens_used_this_month}, month={self.month}/{self.year})>"
+
+
+class TokenUsageHistory(Base):
+    """
+    Token usage history model for tracking individual API calls.
+    
+    Records each LLM API call with token counts and costs.
+    """
+    
+    __tablename__ = "token_usage_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Request information
+    model = Column(String(100), nullable=False)  # Model used (e.g., gpt-4, gemini-pro)
+    endpoint = Column(String(255), nullable=True)  # API endpoint called
+    session_id = Column(String(100), nullable=True, index=True)  # Session/conversation ID
+    
+    # Token counts
+    prompt_tokens = Column(Integer, default=0, nullable=False)  # Input tokens
+    completion_tokens = Column(Integer, default=0, nullable=False)  # Output tokens
+    total_tokens = Column(Integer, default=0, nullable=False)  # Total tokens used
+    
+    # Cost tracking
+    cost_usd = Column(Numeric(10, 6), nullable=True)  # Cost in USD (up to 6 decimal places)
+    
+    # Request metadata
+    request_metadata = Column(JSON, nullable=True)  # Additional metadata (agent_id, etc.)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="token_usage_history")
+    
+    def __repr__(self):
+        return f"<TokenUsageHistory(id={self.id}, user_id={self.user_id}, model={self.model}, total_tokens={self.total_tokens})>"
 

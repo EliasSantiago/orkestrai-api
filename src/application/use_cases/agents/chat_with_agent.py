@@ -18,6 +18,7 @@ from src.domain.exceptions import (
     UnsupportedModelError
 )
 from src.services.adk_context_hooks import set_session_context
+from src.services.token_service import TokenService
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,9 @@ class ChatWithAgentUseCase:
         self.tool_loader = tool_loader
         self.llm_factory = llm_factory
         self.db = db
+        self.token_service = TokenService(db)
         self._last_model_used = None  # Track last model actually used (may differ from requested)
+        self._last_response = None  # Track last response for token calculation
     
     async def execute(
         self,
@@ -180,7 +183,8 @@ class ChatWithAgentUseCase:
         agent: Agent,
         message: str,
         session_id: Optional[str] = None,
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
+        files: Optional[List[FilePart]] = None
     ) -> str:
         """
         Execute chat with a provided agent entity (e.g., default agent from file).
@@ -191,6 +195,7 @@ class ChatWithAgentUseCase:
             message: User message
             session_id: Optional session ID for conversation continuity
             model_override: Optional model override
+            files: Optional file attachments
             
         Returns:
             Assistant response
@@ -236,6 +241,21 @@ class ChatWithAgentUseCase:
         # Build messages for LLM (include model info in instruction)
         messages = self._build_messages(agent, history, message, model_name, files=files)
         
+        # Check token availability before making LLM call
+        try:
+            # Estimate tokens for the request
+            estimated_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=model_name
+            )
+            logger.info(f"📊 Estimated tokens for request: {estimated_tokens}")
+            
+            # Check if user has enough tokens
+            self.token_service.check_token_availability(user_id, estimated_tokens)
+        except Exception as e:
+            logger.error(f"❌ Token check failed: {e}")
+            raise
+        
         # Set session context for ADK (if using Gemini models)
         if model_name.startswith("gemini/") or model_name.startswith("gemini-"):
             set_session_context(session_id, user_id)
@@ -250,6 +270,48 @@ class ChatWithAgentUseCase:
             user_id=user_id,
             session_id=session_id
         )
+        
+        # Record token usage after successful response
+        try:
+            # Calculate tokens from messages (prompt) and response (completion)
+            prompt_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=actual_model
+            )
+            completion_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": "assistant", "content": response}],
+                model=actual_model
+            )
+            total_tokens = prompt_tokens + completion_tokens
+            
+            # Estimate cost (rough estimate, LiteLLM may not have exact pricing)
+            try:
+                import litellm
+                cost_usd = litellm.completion_cost(
+                    model=actual_model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens
+                )
+                if cost_usd is None:
+                    cost_usd = 0.0
+            except Exception:
+                cost_usd = 0.0
+            
+            # Record usage
+            self.token_service.record_token_usage(
+                user_id=user_id,
+                model=actual_model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                cost_usd=cost_usd,
+                endpoint="/chat",
+                session_id=session_id,
+                metadata={"agent_id": agent.id, "agent_name": agent.name}
+            )
+            logger.info(f"💰 Recorded token usage: {total_tokens} tokens (prompt: {prompt_tokens}, completion: {completion_tokens}), ${cost_usd:.6f}")
+        except Exception as e:
+            logger.error(f"⚠️  Failed to record token usage: {e}")
         
         # Save assistant response
         HybridConversationService.add_assistant_message(

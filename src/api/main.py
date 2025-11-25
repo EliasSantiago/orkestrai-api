@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from src.api import auth_routes, agent_routes, conversation_routes, adk_integration_routes, agent_chat_routes, models_routes, mcp_routes, file_search_routes, openai_compatible_routes, user_routes, lobechat_compat_routes, message_routes, lobechat_rest_routes, config_routes
+from src.api import auth_routes, agent_routes, conversation_routes, adk_integration_routes, agent_chat_routes, models_routes, mcp_routes, file_search_routes, openai_compatible_routes, user_routes, lobechat_compat_routes, message_routes, lobechat_rest_routes, config_routes, token_routes
 from src.api.mcp.google import google_calendar_oauth_router, google_calendar_oauth_legacy_router
 from src.api.middleware.error_handler import global_exception_handler
 from src.database import init_db
@@ -61,6 +61,7 @@ app.include_router(lobechat_rest_routes.router)  # Complete REST API routes for 
 app.include_router(lobechat_compat_routes.router)  # LobeChat compatibility endpoints (legacy, deprecated)
 app.include_router(message_routes.router)  # Message-specific routes (stats, rank, heatmap, CRUD)
 app.include_router(config_routes.router)  # Config routes (global config, default agent config)
+app.include_router(token_routes.router)  # Token management and billing routes
 
 # Mount static files for uploaded avatars
 uploads_dir = Path("uploads")
