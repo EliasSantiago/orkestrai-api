@@ -15,13 +15,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# Import models to ensure they are registered with Base
-from src.models import User, Agent, PasswordResetToken, MCPConnection, FileSearchStore, FileSearchFile  # noqa: E402
-from src.models_conversation import ConversationSession, ConversationMessage  # noqa: E402
-
-
 def init_db():
     """Initialize database tables."""
+    # Import models here to avoid circular imports
+    # Models are automatically registered with Base when defined
+    from src.models import User, Agent, PasswordResetToken, MCPConnection, FileSearchStore, FileSearchFile, Plan, UserTokenBalance, TokenUsageHistory  # noqa: F401
+    from src.models_conversation import ConversationSession, ConversationMessage  # noqa: F401
+    
     Base.metadata.create_all(bind=engine)
 
 
