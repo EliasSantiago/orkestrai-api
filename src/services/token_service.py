@@ -339,7 +339,7 @@ class TokenService:
             "period": {
                 "month": balance.month,
                 "year": balance.year,
-                "reset_date": balance.last_reset_at.isoformat()
+                "reset_date": balance.last_reset_at.isoformat() if balance.last_reset_at else None
             },
             "cost": {
                 "total_usd": round(total_cost, 6),
