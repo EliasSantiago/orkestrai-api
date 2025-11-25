@@ -409,8 +409,21 @@ class ChatWithAgentUseCase:
         if model_name.startswith("gemini/") or model_name.startswith("gemini-"):
             set_session_context(session_id, user_id)
         
+        # Check token availability before streaming
+        try:
+            estimated_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=model_name
+            )
+            logger.info(f"📊 Estimated tokens for stream request: {estimated_tokens}")
+            self.token_service.check_token_availability(user_id, estimated_tokens)
+        except Exception as e:
+            logger.error(f"❌ Token check failed for stream: {e}")
+            raise
+        
         # Stream response chunks
         response_chunks = []
+        actual_model_used = model_name
         async for chunk in self._stream_with_retry(
             provider=provider,
             model=model_name,
@@ -423,6 +436,9 @@ class ChatWithAgentUseCase:
             response_chunks.append(chunk)
             yield chunk
         
+        # Get actual model used (may be different if fallback was used)
+        actual_model_used = self._last_model_used or model_name
+        
         # Save complete assistant response
         complete_response = ''.join(response_chunks)
         HybridConversationService.add_assistant_message(
@@ -432,7 +448,34 @@ class ChatWithAgentUseCase:
             db=self.db
         )
         
-        logger.info(f"✅ Chat stream completed - Model: {model_name}, Agent: {agent.name}, User: {user_id}")
+        # Record token usage after streaming completes
+        try:
+            prompt_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=actual_model_used
+            )
+            completion_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": "assistant", "content": complete_response}],
+                model=actual_model_used
+            )
+            total_tokens = prompt_tokens + completion_tokens
+            
+            logger.info(f"📊 Token usage for stream - Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}")
+            
+            self.token_service.record_token_usage(
+                user_id=user_id,
+                model=actual_model_used,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                session_id=session_id,
+                endpoint="/chat/stream"
+            )
+            logger.info(f"✅ Token usage recorded for stream")
+        except Exception as e:
+            logger.error(f"❌ Failed to record token usage for stream: {e}")
+        
+        logger.info(f"✅ Chat stream completed - Model: {actual_model_used}, Agent: {agent.name}, User: {user_id}")
     
     async def execute_with_agent_stream(
         self,
@@ -502,8 +545,21 @@ class ChatWithAgentUseCase:
         if model_name.startswith("gemini/") or model_name.startswith("gemini-"):
             set_session_context(session_id, user_id)
         
+        # Check token availability before streaming
+        try:
+            estimated_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=model_name
+            )
+            logger.info(f"📊 Estimated tokens for stream request: {estimated_tokens}")
+            self.token_service.check_token_availability(user_id, estimated_tokens)
+        except Exception as e:
+            logger.error(f"❌ Token check failed for stream: {e}")
+            raise
+        
         # Stream response chunks
         response_chunks = []
+        actual_model_used = model_name
         async for chunk in self._stream_with_retry(
             provider=provider,
             model=model_name,
@@ -516,6 +572,9 @@ class ChatWithAgentUseCase:
             response_chunks.append(chunk)
             yield chunk
         
+        # Get actual model used (may be different if fallback was used)
+        actual_model_used = self._last_model_used or model_name
+        
         # Save complete assistant response
         complete_response = ''.join(response_chunks)
         HybridConversationService.add_assistant_message(
@@ -525,7 +584,34 @@ class ChatWithAgentUseCase:
             db=self.db
         )
         
-        logger.info(f"✅ Chat stream completed - Model: {model_name}, Agent: {agent.name}, User: {user_id}")
+        # Record token usage after streaming completes
+        try:
+            prompt_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=actual_model_used
+            )
+            completion_tokens = self.token_service.calculate_tokens_from_messages(
+                messages=[{"role": "assistant", "content": complete_response}],
+                model=actual_model_used
+            )
+            total_tokens = prompt_tokens + completion_tokens
+            
+            logger.info(f"📊 Token usage for stream - Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}")
+            
+            self.token_service.record_token_usage(
+                user_id=user_id,
+                model=actual_model_used,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                session_id=session_id,
+                endpoint="/chat/stream"
+            )
+            logger.info(f"✅ Token usage recorded for stream")
+        except Exception as e:
+            logger.error(f"❌ Failed to record token usage for stream: {e}")
+        
+        logger.info(f"✅ Chat stream completed - Model: {actual_model_used}, Agent: {agent.name}, User: {user_id}")
     
     def _build_messages(
         self,
