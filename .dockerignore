@@ -1,5 +1,10 @@
-# Python
+# ============================
+# .dockerignore otimizado para builds mais rápidos
+# ============================
+
+# Python bytecode e caches
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -7,49 +12,78 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.cover
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv/
 
-# IDE
+# IDE e editores
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-*
+.project
+.pydevproject
 
 # Git
 .git/
 .gitignore
+.gitattributes
 
-# Environment
+# Environment files (NUNCA incluir no container!)
 .env
-.env.local
-.env.*.local
+.env.*
+!env.template
 
-# Documentation
+# GitHub Actions (não precisa no container)
+.github/
+
+# Documentation (não precisa no container)
 *.md
 docs/
+MANUAL_MIGRATION_GUIDE.md
 
-# Docker
+# Docker configs (não precisa copiar para dentro)
 Dockerfile
+Dockerfile.*
 .dockerignore
 docker-compose.yml
+docker-compose.*.yml
+!docker-compose.prod.yml
 
-# Scripts - COMMENTED: We need scripts/ for database migrations
-# scripts/
+# Scripts de desenvolvimento local
+generate-passwords.sh
+nginx.conf.template
 
-# Examples
-examples/
-
-# Chat UI
+# Chat UI (frontend separado)
 chat-ui/
 
-# Migrations (opcional - comente se precisar incluir)
-# migrations/
+# Uploads locais (dados de usuário)
+uploads/
 
-# Others
+# Testes
+tests/
+*_test.py
+test_*.py
+
+# Arquivos temporários e logs
 *.log
+*.tmp
+*.temp
 .DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*~
 

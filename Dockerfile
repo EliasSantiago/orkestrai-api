@@ -1,6 +1,6 @@
 # Multi-stage build para otimizar o tamanho da imagem
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 WORKDIR /app
 
 # Instalar dependências do sistema necessárias para build
@@ -40,26 +40,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Criar usuário não-root
+# Criar usuário não-root ANTES de copiar arquivos (para usar --chown)
 RUN useradd -m -u 1000 appuser
 
-# Copiar dependências Python do builder
-COPY --from=builder /root/.local /home/appuser/.local
+# Copiar dependências Python do builder COM ownership correto (evita chown lento)
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
 # Adicionar .local/bin ao PATH
 ENV PATH=/home/appuser/.local/bin:$PATH
 
-# Copiar código da aplicação
-COPY . .
+# Copiar código da aplicação COM ownership correto
+COPY --chown=appuser:appuser . .
 
-# Entry-point
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+# Entry-point COM ownership correto
+COPY --chown=appuser:appuser docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Ajustar dono de tudo para o appuser (incluindo o nano que já está instalado)
-RUN chown -R appuser:appuser /app /home/appuser/.local
-
-# Mudar para usuário não-root
+# Mudar para usuário não-root (sem necessidade de chown -R!)
 USER appuser
 
 EXPOSE 8001
