@@ -37,8 +37,8 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 
-# Scripts
-scripts/
+# Scripts - COMMENTED: We need scripts/ for database migrations
+# scripts/
 
 # Examples
 examples/
