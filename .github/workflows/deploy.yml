@@ -16,7 +16,6 @@ concurrency:
 
 env:
   DOCKER_IMAGE: orkestrai-api
-  DOCKER_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   build-and-deploy:
@@ -29,6 +28,16 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     steps:
+      - name: Set lowercase variables
+        id: vars
+        run: |
+          REGISTRY_LOWER=$(echo "ghcr.io/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          ACTOR_LOWER=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
+          echo "registry=${REGISTRY_LOWER}" >> $GITHUB_OUTPUT
+          echo "actor=${ACTOR_LOWER}" >> $GITHUB_OUTPUT
+          echo "📦 Docker Registry: ${REGISTRY_LOWER}"
+          echo "👤 Actor (lowercase): ${ACTOR_LOWER}"
+
       - name: Display deployment info
         run: |
           echo "🚀 Deploy triggered by: ${{ github.event_name }}"
@@ -54,7 +63,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}
+          images: ${{ steps.vars.outputs.registry }}/${{ env.DOCKER_IMAGE }}
           tags: |
             type=sha,prefix=,format=short
             type=raw,value=latest
@@ -100,7 +109,7 @@ jobs:
             
             DEPLOY_DIR="/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
             IMAGE_NAME="${{ env.DOCKER_IMAGE }}"
-            REGISTRY_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}"
+            REGISTRY_IMAGE="${{ steps.vars.outputs.registry }}/${{ env.DOCKER_IMAGE }}"
             GIT_SHA="${{ github.sha }}"
             SHORT_SHA="${GIT_SHA:0:7}"
             
@@ -155,7 +164,7 @@ jobs:
             
             # Login no GitHub Container Registry
             echo "🔐 Logging in to GitHub Container Registry..."
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ steps.vars.outputs.actor }} --password-stdin
             
             # Pull da nova imagem
             echo "📥 Pulling new Docker image..."
