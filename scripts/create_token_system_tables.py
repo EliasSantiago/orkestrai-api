@@ -71,7 +71,7 @@ def run_migration():
         session.execute(text("""
             INSERT INTO plans (name, description, price_month, price_year, monthly_token_limit)
             VALUES 
-                ('free', 'Plano gratuito com limite básico de tokens', 0.00, 0.00, 200000),
+                ('free', 'Plano gratuito com limite básico de tokens', 0.00, 0.00, 2000),
                 ('pro', 'Plano profissional com limite expandido de tokens', 29.90, 299.00, 1000000),
                 ('plus', 'Plano premium com alto limite de tokens', 99.90, 999.00, 9000000)
             ON CONFLICT (name) DO UPDATE SET
