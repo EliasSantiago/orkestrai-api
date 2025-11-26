@@ -6,6 +6,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def get_int_env(key: str, default: str) -> int:
+    """Get integer environment variable, removing inline comments."""
+    value = os.getenv(key, default)
+    # Remove inline comments (anything after # or //)
+    if isinstance(value, str):
+        value = value.split('#')[0].split('//')[0].strip()
+    return int(value)
+
+
 class Config:
     """Application configuration."""
     
@@ -23,16 +32,16 @@ class Config:
     
     # Redis Configuration
     REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-    REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-    REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+    REDIS_PORT = get_int_env("REDIS_PORT", "6379")
+    REDIS_DB = get_int_env("REDIS_DB", "0")
     REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
     
     # Conversation Context Settings
     # Conversation TTL in Redis (seconds)
     # Reduced from 24h to 4h for better security and GDPR/LGPD compliance
     # This reduces exposure window for personal data while maintaining good UX
-    CONVERSATION_TTL = int(os.getenv("CONVERSATION_TTL", "14400"))  # 4 hours in seconds (was 24h)
-    MAX_CONVERSATION_HISTORY = int(os.getenv("MAX_CONVERSATION_HISTORY", "100"))  # Max messages per session
+    CONVERSATION_TTL = get_int_env("CONVERSATION_TTL", "14400")  # 4 hours in seconds (was 24h)
+    MAX_CONVERSATION_HISTORY = get_int_env("MAX_CONVERSATION_HISTORY", "100")  # Max messages per session
     
     # Model defaults
     DEFAULT_MODEL_GEMINI = os.getenv("DEFAULT_MODEL_GEMINI", "gemini-2.0-flash-exp")
@@ -52,8 +61,8 @@ class Config:
     # Documentation: https://docs.litellm.ai/docs/
     LITELLM_ENABLED = os.getenv("LITELLM_ENABLED", "false").lower() == "true"  # Enable/disable LiteLLM provider
     LITELLM_VERBOSE = os.getenv("LITELLM_VERBOSE", "false").lower() == "true"  # Enable verbose logging for debugging
-    LITELLM_NUM_RETRIES = int(os.getenv("LITELLM_NUM_RETRIES", "3"))  # Number of retries for failed requests
-    LITELLM_REQUEST_TIMEOUT = int(os.getenv("LITELLM_REQUEST_TIMEOUT", "600"))  # Request timeout in seconds (10 minutes)
+    LITELLM_NUM_RETRIES = get_int_env("LITELLM_NUM_RETRIES", "3")  # Number of retries for failed requests
+    LITELLM_REQUEST_TIMEOUT = get_int_env("LITELLM_REQUEST_TIMEOUT", "600")  # Request timeout in seconds (10 minutes)
     LITELLM_CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "litellm_config.yaml")  # Path to LiteLLM config file
     
     # Additional LiteLLM provider API keys (optional)
@@ -81,7 +90,7 @@ class Config:
     
     # Email Configuration (for password reset)
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_PORT = get_int_env("SMTP_PORT", "587")
     SMTP_USER = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", SMTP_USER)
@@ -89,7 +98,7 @@ class Config:
     SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
     
     # Password Reset Settings
-    PASSWORD_RESET_TOKEN_EXPIRE_HOURS = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_HOURS", "24"))
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS = get_int_env("PASSWORD_RESET_TOKEN_EXPIRE_HOURS", "24")
     PASSWORD_RESET_BASE_URL = os.getenv("PASSWORD_RESET_BASE_URL", "http://localhost:8001")
     
     # MCP (Model Context Protocol) Configuration
