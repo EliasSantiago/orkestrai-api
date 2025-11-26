@@ -40,65 +40,49 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate Docker tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}
           tags: |
             type=sha,prefix=,format=short
             type=raw,value=latest
             type=raw,value=prod-{{date 'YYYYMMDD-HHmmss'}}
 
-      - name: Build and export Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-          outputs: type=docker,dest=app-image.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
-      - name: Upload Docker image as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image-${{ github.sha }}
-          path: app-image.tar
-          retention-days: 7
-          compression-level: 0  # Já está comprimido
-
-      - name: Verify Docker image artifact
-        run: |
-          echo "🔍 Verifying Docker image artifact..."
-          if [ ! -f app-image.tar ]; then
-            echo "❌ app-image.tar not found!"
-            exit 1
-          fi
-          FILE_SIZE=$(stat -f%z app-image.tar 2>/dev/null || stat -c%s app-image.tar 2>/dev/null)
-          echo "📦 Image file size: $(numfmt --to=iec-i --suffix=B $FILE_SIZE || echo ${FILE_SIZE} bytes)"
-          if [ "$FILE_SIZE" -lt 100000 ]; then
-            echo "❌ Image file is too small (possibly corrupted)"
-            exit 1
-          fi
-          echo "✅ Docker image artifact verified"
-
-      - name: Copy files to GCP E2 instance
+      - name: Copy deployment files to GCP E2 instance
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
-          source: "app-image.tar,docker-compose.prod.yml,env.template,scripts/migrate_database.sh,migrations/"
+          source: "docker-compose.prod.yml,env.template,scripts/migrate_database.sh,migrations/"
           target: "/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
           strip_components: 0
-          timeout: 15m
+          timeout: 3m
 
       - name: Deploy on GCP E2 instance
         uses: appleboy/ssh-action@v1.0.3
@@ -113,6 +97,7 @@ jobs:
             
             DEPLOY_DIR="/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
             IMAGE_NAME="${{ env.DOCKER_IMAGE }}"
+            REGISTRY_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}"
             GIT_SHA="${{ github.sha }}"
             SHORT_SHA="${GIT_SHA:0:7}"
             
@@ -121,23 +106,6 @@ jobs:
             echo "================================================"
             echo "🚀 Starting deployment - Commit: $SHORT_SHA"
             echo "================================================"
-            
-            # Verificar se arquivo tar existe e é válido
-            echo "🔍 Verifying Docker image file..."
-            if [ ! -f app-image.tar ]; then
-              echo "❌ app-image.tar not found in deployment directory!"
-              ls -lah "$DEPLOY_DIR"
-              exit 1
-            fi
-            
-            FILE_SIZE=$(stat -c%s app-image.tar)
-            echo "📦 Image file size: $(numfmt --to=iec-i --suffix=B $FILE_SIZE)"
-            
-            if [ "$FILE_SIZE" -lt 100000 ]; then
-              echo "❌ Image file is too small (possibly corrupted or incomplete)"
-              exit 1
-            fi
-            echo "✅ Docker image file verified"
             
             # Verificar se .env existe
             if [ ! -f .env ]; then
@@ -160,25 +128,19 @@ jobs:
             done < .env
             set +a
             
-            # Salvar imagem atual para rollback (limpar quebras de linha)
-            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null | tr -d '\n\r' || docker images "${IMAGE_NAME}:latest" --format "{{.Repository}}:{{.Tag}}" | head -1 | tr -d '\n\r' || echo "none")
-            CURRENT_IMAGE=$(echo "$CURRENT_IMAGE" | xargs)  # Remove espaços extras
+            # Salvar imagem atual para rollback
+            CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' orkestrai-api 2>/dev/null | tr -d '\n\r' | xargs || echo "none")
             echo "📦 Current image: '$CURRENT_IMAGE'"
             
             # Função de rollback
             rollback() {
               echo "❌ Deployment failed! Starting rollback..."
-              if [ "$CURRENT_IMAGE" != "none" ] && [ -n "$CURRENT_IMAGE" ] && [ "$CURRENT_IMAGE" != "" ]; then
+              if [ "$CURRENT_IMAGE" != "none" ] && [ -n "$CURRENT_IMAGE" ]; then
                 echo "🔄 Restoring previous image: '$CURRENT_IMAGE'"
-                # Limpar quebras de linha antes de usar
-                CLEAN_IMAGE=$(echo "$CURRENT_IMAGE" | tr -d '\n\r' | xargs)
-                if [ -n "$CLEAN_IMAGE" ] && [ "$CLEAN_IMAGE" != "none" ]; then
-                  docker tag "$CLEAN_IMAGE" "${IMAGE_NAME}:latest" 2>/dev/null || true
-                  docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api 2>/dev/null || true
-                  echo "✅ Rollback completed"
-                else
-                  echo "⚠️  Invalid image name for rollback"
-                fi
+                docker stop orkestrai-api 2>/dev/null || true
+                docker rm orkestrai-api 2>/dev/null || true
+                docker compose -f docker-compose.prod.yml up -d --no-deps api 2>/dev/null || true
+                echo "✅ Rollback completed"
               else
                 echo "⚠️  No previous image to rollback to"
               fi
@@ -188,28 +150,19 @@ jobs:
             # Configurar trap para rollback em caso de erro
             trap rollback ERR
             
-            # Carregar nova imagem Docker
-            echo "📥 Loading new Docker image..."
-            if ! docker load -i app-image.tar; then
-              echo "❌ Failed to load Docker image from tar file"
-              exit 1
-            fi
-            rm -f app-image.tar
+            # Login no GitHub Container Registry
+            echo "🔐 Logging in to GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Tag com SHA para versionamento
-            docker tag "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${SHORT_SHA}"
+            # Pull da nova imagem
+            echo "📥 Pulling new Docker image..."
+            docker pull "${REGISTRY_IMAGE}:${SHORT_SHA}"
+            docker tag "${REGISTRY_IMAGE}:${SHORT_SHA}" "${REGISTRY_IMAGE}:latest"
             
-            # Verificar se imagem foi carregada com sucesso
-            echo "🔍 Verifying loaded images..."
-            docker images "${IMAGE_NAME}"
+            # Criar tag local para compatibilidade com docker-compose
+            docker tag "${REGISTRY_IMAGE}:latest" "${IMAGE_NAME}:latest"
             
-            if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}:latest$"; then
-              echo "❌ Image ${IMAGE_NAME}:latest not found after loading"
-              echo "📋 Available images:"
-              docker images
-              exit 1
-            fi
-            echo "✅ Docker image loaded and verified successfully"
+            echo "✅ Docker image pulled successfully"
             
             # Iniciar/verificar serviços de infraestrutura
             echo "🔧 Starting infrastructure services..."
@@ -319,9 +272,19 @@ jobs:
             fi
             echo "✅ Database migrations completed successfully"
             
-            # Blue-Green Deployment: Iniciar novo container antes de parar o antigo
+            # Parar e remover container antigo (se existir)
+            echo "🛑 Stopping old container..."
+            if docker ps -a | grep -q orkestrai-api; then
+              docker stop orkestrai-api 2>/dev/null || true
+              docker rm orkestrai-api 2>/dev/null || true
+              echo "✅ Old container removed"
+            else
+              echo "ℹ️  No old container to remove"
+            fi
+            
+            # Iniciar novo container
             echo "🚀 Starting new application container..."
-            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api
+            docker compose -f docker-compose.prod.yml up -d --no-deps api
             
             # Aguardar novo container ficar saudável
             echo "🏥 Waiting for new container health check..."
