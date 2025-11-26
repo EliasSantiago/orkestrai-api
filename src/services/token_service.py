@@ -15,7 +15,7 @@ from src.api.exceptions import HTTPException
 class TokenService:
     """Service for managing user token balances and usage tracking."""
     
-    OVERAGE_ALLOWANCE = 0.10  # Allow 10% overage
+    OVERAGE_TOKENS = 500  # Allow 500 extra tokens to finish tasks
     
     def __init__(self, db: Session):
         """Initialize token service with database session."""
@@ -118,7 +118,7 @@ class TokenService:
         tokens_limit = plan.monthly_token_limit
         tokens_used = balance.tokens_used_this_month
         tokens_remaining = max(0, tokens_limit - tokens_used)
-        max_overage = int(tokens_limit * self.OVERAGE_ALLOWANCE)
+        max_overage = self.OVERAGE_TOKENS  # Fixed 500 tokens overage
         overage_used = max(0, tokens_used - tokens_limit)
         
         # Check if user exceeded limit including overage
@@ -294,7 +294,7 @@ class TokenService:
         tokens_limit = plan.monthly_token_limit
         tokens_used = balance.tokens_used_this_month
         tokens_remaining = max(0, tokens_limit - tokens_used)
-        max_overage = int(tokens_limit * self.OVERAGE_ALLOWANCE)
+        max_overage = self.OVERAGE_TOKENS  # Fixed 500 tokens overage
         overage_used = max(0, tokens_used - tokens_limit)
         
         # Calculate percentage
