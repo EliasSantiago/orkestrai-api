@@ -108,6 +108,7 @@ services:
       - agents_network
     volumes:
       - ./logs:/app/logs
+      - ./uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/docs"]
       interval: 30s
