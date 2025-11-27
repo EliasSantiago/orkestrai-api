@@ -101,6 +101,23 @@ class Config:
     PASSWORD_RESET_TOKEN_EXPIRE_HOURS = get_int_env("PASSWORD_RESET_TOKEN_EXPIRE_HOURS", "24")
     PASSWORD_RESET_BASE_URL = os.getenv("PASSWORD_RESET_BASE_URL", "http://localhost:8001")
     
+    # CORS Configuration
+    # When allow_credentials=True, you cannot use allow_origins=["*"]
+    # Must specify exact origins. Use comma-separated list in CORS_ORIGINS env var
+    # Default includes common development and production origins
+    cors_origins_env = os.getenv("CORS_ORIGINS", "")
+    if cors_origins_env:
+        # Parse comma-separated origins and strip whitespace
+        CORS_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+    else:
+        # Default origins for development and common production setups
+        CORS_ORIGINS = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://136.111.4.62:3000",  # Common production IP
+            "http://localhost:3210",  # LobeChat default
+        ]
+    
     # MCP (Model Context Protocol) Configuration
     # MCP providers are configured per-user via the API
     # No global MCP configuration needed

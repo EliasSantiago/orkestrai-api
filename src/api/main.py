@@ -10,6 +10,7 @@ from src.api import auth_routes, agent_routes, conversation_routes, adk_integrat
 from src.api.mcp.google import google_calendar_oauth_router, google_calendar_oauth_legacy_router
 from src.api.middleware.error_handler import global_exception_handler
 from src.database import init_db
+from src.config import Config
 
 
 @asynccontextmanager
@@ -36,12 +37,17 @@ app = FastAPI(
 app.add_exception_handler(Exception, global_exception_handler)
 
 # CORS middleware
+# IMPORTANT: When allow_credentials=True, you CANNOT use allow_origins=["*"]
+# The browser will block it for security reasons. Must specify exact origins.
+cors_origins = Config.CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins,  # List of specific origins
+    allow_credentials=True,  # Required for cookies/auth headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Include routers
