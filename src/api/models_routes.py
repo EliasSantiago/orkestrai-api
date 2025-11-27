@@ -14,9 +14,10 @@ TOP_MODELS = {
         "openai/gpt-4-turbo",     # High performance alternative
     ],
     "gemini": [
-        "gemini/gemini-3-pro-preview",  # Latest Pro model (Preview - according to official docs)
-        "gemini/gemini-2.5-pro",        # Pro version with advanced capabilities
-        "gemini/gemini-2.5-flash",      # Fast and efficient version
+        "gemini/gemini-3-pro-preview",  # Latest Pro model (Preview - testing phase)
+        "gemini/gemini-3-pro",           # Latest Pro model (Stable - when available)
+        "gemini/gemini-2.5-pro",         # Pro version with advanced capabilities
+        "gemini/gemini-2.5-flash",       # Fast and efficient version
     ],
 }
 
