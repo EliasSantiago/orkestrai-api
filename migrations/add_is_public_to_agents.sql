@@ -28,3 +28,4 @@ SELECT
     SUM(CASE WHEN NOT is_public THEN 1 ELSE 0 END) as private_agents
 FROM agents;
 
+

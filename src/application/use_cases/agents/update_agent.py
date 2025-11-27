@@ -65,6 +65,10 @@ class UpdateAgentUseCase:
         if not agent:
             raise AgentNotFoundError(agent_id)
         
+        # Verify ownership - users can only edit their own agents
+        if agent.user_id != user_id:
+            raise AgentNotFoundError(agent_id)
+        
         # Determine final values after update
         final_model = model if model is not None else agent.model
         final_use_file_search = use_file_search if use_file_search is not None else agent.use_file_search
