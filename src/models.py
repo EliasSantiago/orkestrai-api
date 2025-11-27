@@ -1,7 +1,7 @@
 """Database models for users and agents."""
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, BigInteger, JSON, Float, Numeric
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, BigInteger, JSON, Float, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from src.database import Base
@@ -148,6 +148,33 @@ class PasswordResetToken(Base):
     
     def __repr__(self):
         return f"<PasswordResetToken(id={self.id}, user_id={self.user_id}, expires_at={self.expires_at}, used={self.used})>"
+
+
+class UserAgentFavorite(Base):
+    """User favorite agents model.
+    
+    This model stores which public agents each user has favorited.
+    Allows users to favorite public agents without modifying the agent itself.
+    """
+    
+    __tablename__ = "user_agent_favorites"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    agent = relationship("Agent")
+    
+    # Unique constraint: a user can only favorite an agent once
+    __table_args__ = (
+        UniqueConstraint('user_id', 'agent_id', name='uq_user_agent_favorite'),
+    )
+    
+    def __repr__(self):
+        return f"<UserAgentFavorite(id={self.id}, user_id={self.user_id}, agent_id={self.agent_id})>"
 
 
 class MCPConnection(Base):
