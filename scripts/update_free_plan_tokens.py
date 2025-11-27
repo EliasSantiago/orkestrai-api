@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Migration script to update free plan token limit from 200,000 to 2,000 tokens.
+Migration script to update free plan token limit to 10,000 tokens.
 
 This script:
-1. Updates the free plan monthly_token_limit to 2000
+1. Updates the free plan monthly_token_limit to 10000
 2. Updates all existing user_token_balances for free plan users (no changes to their usage)
 """
 
@@ -42,10 +42,10 @@ def run_migration():
         logger.info("Starting free plan token limit update...")
         
         # Step 1: Update free plan token limit
-        logger.info("Updating free plan monthly_token_limit to 2000...")
+        logger.info("Updating free plan monthly_token_limit to 10000...")
         result = session.execute(text("""
             UPDATE plans 
-            SET monthly_token_limit = 2000,
+            SET monthly_token_limit = 10000,
                 updated_at = CURRENT_TIMESTAMP
             WHERE name = 'free';
         """))
@@ -67,7 +67,7 @@ def run_migration():
         # - The limit check happens dynamically using the plan's monthly_token_limit
         
         logger.info("✅ Free plan token limit update completed successfully!")
-        logger.info("   - Free plan limit: 200,000 → 2,000 tokens")
+        logger.info("   - Free plan limit: 2,000 → 10,000 tokens")
         logger.info(f"   - {user_count} users affected")
         logger.info("   - User token usage history preserved")
         

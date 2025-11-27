@@ -69,7 +69,7 @@ def run_migration():
         
         logger.info("✅ Auto-assign free plan trigger created successfully!")
         logger.info("   - New users will automatically be assigned to the free plan")
-        logger.info("   - Free plan provides 2,000 tokens per month")
+        logger.info("   - Free plan provides 10,000 tokens per month")
         
     except Exception as e:
         logger.error(f"❌ Migration failed: {e}")
