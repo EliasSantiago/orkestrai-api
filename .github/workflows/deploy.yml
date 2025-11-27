@@ -91,7 +91,7 @@ jobs:
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
-          source: "docker-compose.prod.yml,env.template,scripts/migrate_database.sh,scripts/run_token_migrations.sh,migrations/"
+          source: "docker-compose.prod.yml,env.template,scripts/run_alembic_migrations.sh,alembic/,alembic.ini"
           target: "/home/${{ secrets.GCP_USERNAME }}/orkestrai-api"
           strip_components: 0
           timeout: 3m
@@ -267,26 +267,22 @@ jobs:
             done
             echo "✅ Redis is ready and accepting connections"
             
-            # Executar migrations
-            echo "🔄 Running database migrations..."
-            echo "  - SQL migrations and table creation..."
+            # Executar migrations usando Alembic
+            echo "🔄 Running database migrations with Alembic..."
             if ! docker run --rm \
               --entrypoint "" \
               --network agents_network \
               --env-file .env \
-              -v "$(pwd)/migrations:/app/migrations:ro" \
-              -v "$(pwd)/scripts:/app/scripts:ro" \
+              -v "$(pwd)/alembic:/app/alembic:ro" \
+              -v "$(pwd)/alembic.ini:/app/alembic.ini:ro" \
               "${IMAGE_NAME}:latest" \
-              bash -x /app/scripts/migrate_database.sh; then
+              bash -x /app/scripts/run_alembic_migrations.sh; then
               echo "❌ Database migrations failed!"
               echo "📋 Checking migration script logs..."
               docker logs --tail 50 agents_postgres 2>&1 || true
               exit 1
             fi
             echo "✅ Database migrations completed successfully"
-            echo ""
-            echo "  Note: Token system migrations (create_token_system_tables, etc.)"
-            echo "        are executed automatically by migrate_database.sh"
             
             # Parar e remover container antigo (se existir)
             echo "🛑 Stopping old container..."
