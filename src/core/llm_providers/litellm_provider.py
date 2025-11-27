@@ -535,8 +535,9 @@ class LiteLLMProvider(LLMProvider):
                 litellm_params["api_key"] = Config.GOOGLE_API_KEY
                 
                 # ALWAYS force direct Gemini API (not Vertex AI)
-                # According to official docs: https://ai.google.dev/gemini-api/docs/gemini-3
-                # gemini-3-pro-preview works with direct API using GOOGLE_API_KEY
+                # According to official docs: https://ai.google.dev/gemini-api/docs/pricing#gemini-3-pro-preview
+                # gemini-3-pro-preview is ONLY available via direct Gemini API (Google AI Studio)
+                # NOT available via Vertex AI
                 # Remove ALL Vertex AI credentials to ensure we use direct API
                 vertex_env_var_names = [
                     "GOOGLE_APPLICATION_CREDENTIALS",
@@ -553,16 +554,23 @@ class LiteLLMProvider(LLMProvider):
                         vertex_creds_removed = True
                         logger.info(f"Temporarily unset {var_name} to force direct Gemini API")
                 
-                # Explicitly set to use direct Gemini API (not Vertex AI)
-                # Force litellm to use gemini/ provider by ensuring we use the direct API endpoint
-                # The gemini/ prefix should automatically use the direct API when api_key is provided
-                # Remove any api_base that might point to Vertex AI
-                if "api_base" in litellm_params:
-                    del litellm_params["api_base"]
+                # CRITICAL: Force direct Gemini API by explicitly setting api_base
+                # For gemini-3-pro-preview, MUST use direct API (not Vertex AI)
+                # LiteLLM will use Vertex AI if it detects credentials, even with gemini/ prefix
+                # Solution: Explicitly set api_base to direct Gemini API endpoint
+                if "gemini-3-pro-preview" in normalized_model or "gemini-3-pro" in normalized_model:
+                    # Force direct Gemini API endpoint (Google AI Studio)
+                    # This ensures we use https://generativelanguage.googleapis.com instead of Vertex AI
+                    litellm_params["api_base"] = "https://generativelanguage.googleapis.com"
+                    logger.info(f"🔧 Forcing direct Gemini API for {normalized_model} (not Vertex AI)")
+                    print(f"🔧 Forçando API direta do Gemini para {normalized_model} (não Vertex AI)")
+                else:
+                    # For other Gemini models, remove any api_base that might point to Vertex AI
+                    if "api_base" in litellm_params:
+                        del litellm_params["api_base"]
                 
                 # Ensure we're using the direct Gemini API endpoint
-                # Use v1beta for models with tool support (system_instruction, tools, toolConfig)
-                # Do not set api_base - let LiteLLM handle it automatically
+                # The gemini/ prefix with api_base set to direct API ensures we don't use Vertex AI
                 
                 # For Gemini 3 Pro, add thinking_level parameter (default: high)
                 # According to docs: https://ai.google.dev/gemini-api/docs/gemini-3
@@ -576,7 +584,8 @@ class LiteLLMProvider(LLMProvider):
                     else:
                         litellm_params["thinking_level"] = kwargs["thinking_level"]
                 
-                logger.info(f"Using direct Gemini API (not Vertex AI) for {normalized_model}")
+                logger.info(f"✅ Configured to use direct Gemini API (not Vertex AI) for {normalized_model}")
+                logger.info(f"   API Base: {litellm_params.get('api_base', 'default (direct API)')}")
                 print(f"🔧 Configurado para usar API direta do Gemini (não Vertex AI) para {normalized_model}")
             elif model.startswith("openai/"):
                 litellm_params["api_key"] = Config.OPENAI_API_KEY
