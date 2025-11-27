@@ -199,7 +199,38 @@ else
 fi
 
 echo ""
-echo "3️⃣ Verificando integridade do banco..."
+echo "3️⃣ Executando migrations Python do sistema de tokens..."
+echo "--------------------------------------------------------"
+
+# Executar migrations Python do sistema de tokens
+# Tentar diferentes caminhos possíveis
+TOKEN_MIGRATION_SCRIPT=""
+if [ -f "/app/scripts/run_token_migrations.sh" ]; then
+    TOKEN_MIGRATION_SCRIPT="/app/scripts/run_token_migrations.sh"
+elif [ -f "scripts/run_token_migrations.sh" ]; then
+    TOKEN_MIGRATION_SCRIPT="scripts/run_token_migrations.sh"
+elif [ -f "./scripts/run_token_migrations.sh" ]; then
+    TOKEN_MIGRATION_SCRIPT="./scripts/run_token_migrations.sh"
+fi
+
+if [ -n "$TOKEN_MIGRATION_SCRIPT" ] && [ -f "$TOKEN_MIGRATION_SCRIPT" ]; then
+    echo "  Executando $TOKEN_MIGRATION_SCRIPT..."
+    if bash "$TOKEN_MIGRATION_SCRIPT"; then
+        echo -e "${GREEN}✓ Migrations Python do sistema de tokens concluídas${NC}"
+    else
+        echo -e "${RED}✗ Erro ao executar migrations Python${NC}"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠ Script run_token_migrations.sh não encontrado (pulando)${NC}"
+    echo "  Caminhos testados:"
+    echo "    - /app/scripts/run_token_migrations.sh"
+    echo "    - scripts/run_token_migrations.sh"
+    echo "    - ./scripts/run_token_migrations.sh"
+fi
+
+echo ""
+echo "4️⃣ Verificando integridade do banco..."
 echo "----------------------------------------"
 
 # Listar tabelas criadas
