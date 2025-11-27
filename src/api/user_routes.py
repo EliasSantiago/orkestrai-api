@@ -262,8 +262,14 @@ async def update_avatar(
         )
     
     # Create uploads directory if it doesn't exist
-    uploads_dir = Path("uploads/avatars")
-    uploads_dir.mkdir(parents=True, exist_ok=True)
+    # Use absolute path to avoid permission issues
+    uploads_dir = Path("/app/uploads/avatars")
+    try:
+        uploads_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+    except PermissionError:
+        # Fallback to relative path if absolute fails
+        uploads_dir = Path("uploads/avatars")
+        uploads_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
     
     # Generate unique filename
     unique_filename = f"user_{user_id}_{uuid.uuid4().hex[:8]}{file_extension}"
