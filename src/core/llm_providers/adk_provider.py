@@ -279,87 +279,96 @@ class ADKProvider(LLMProvider):
                 instruction=instruction,
                 tools=adk_tools  # Only callable functions here
             )
-        logger.info(f"✅ ADK Agent created successfully with tools: {[getattr(t, '__name__', str(t)) for t in adk_tools]}")
-        
-        # Inject context if available (for conversation history)
-        # This is done by the caller in agent_chat_routes.py, but we check here too
-        if "inject_context" in kwargs and kwargs["inject_context"]:
+            logger.info(f"✅ ADK Agent created successfully with tools: {[getattr(t, '__name__', str(t)) for t in adk_tools]}")
+            
+            # Inject context if available (for conversation history)
+            # This is done by the caller in agent_chat_routes.py, but we check here too
+            if "inject_context" in kwargs and kwargs["inject_context"]:
+                try:
+                    from src.services.adk_context_hooks import inject_context_into_agent
+                    session_id = kwargs.get("session_id", "default")
+                    user_id = kwargs.get("user_id", "default")
+                    inject_context_into_agent(agent, session_id, user_id)
+                except Exception as e:
+                    print(f"⚠ Warning: Could not inject context: {e}")
+            
+            # Create runner
+            app_name = kwargs.get("app_name", "chat_app")
+            runner = InMemoryRunner(agent=agent, app_name=app_name)
+            
+            # Get user ID and session ID
+            user_id = kwargs.get("user_id", "default")
+            session_id = kwargs.get("session_id", "default")
+            
+            # Get last user message or use the last message in conversation
+            if conversation:
+                last_message = conversation[-1]
+            else:
+                raise ValueError("No messages provided")
+            
+            # Ensure session exists
             try:
-                from src.services.adk_context_hooks import inject_context_into_agent
-                session_id = kwargs.get("session_id", "default")
-                user_id = kwargs.get("user_id", "default")
-                inject_context_into_agent(agent, session_id, user_id)
-            except Exception as e:
-                print(f"⚠ Warning: Could not inject context: {e}")
-        
-        # Create runner
-        app_name = kwargs.get("app_name", "chat_app")
-        runner = InMemoryRunner(agent=agent, app_name=app_name)
-        
-        # Get user ID and session ID
-        user_id = kwargs.get("user_id", "default")
-        session_id = kwargs.get("session_id", "default")
-        
-        # Get last user message or use the last message in conversation
-        if conversation:
-            last_message = conversation[-1]
-        else:
-            raise ValueError("No messages provided")
-        
-        # Ensure session exists
-        try:
-            session = await runner.session_service.get_session(
-                app_name=app_name,
-                user_id=str(user_id),
-                session_id=session_id
-            )
-            if not session:
-                session = await runner.session_service.create_session(
+                session = await runner.session_service.get_session(
                     app_name=app_name,
                     user_id=str(user_id),
                     session_id=session_id
                 )
-        except Exception:
-            # Try to create session if it doesn't exist
-            try:
-                await runner.session_service.create_session(
-                    app_name=app_name,
-                    user_id=str(user_id),
-                    session_id=session_id
-                )
+                if not session:
+                    session = await runner.session_service.create_session(
+                        app_name=app_name,
+                        user_id=str(user_id),
+                        session_id=session_id
+                    )
             except Exception:
-                pass  # Session might already exist
-        
-        # Run agent (File Search is already configured in Agent)
-        # The ADK Runner automatically handles tool calls when tools are provided to the Agent
-        async for event in runner.run_async(
-            user_id=str(user_id),
-            session_id=session_id,
-            new_message=last_message
-        ):
-            # Log event type for debugging
-            event_type = type(event).__name__
-            logger.debug(f"🔍 ADK Event type: {event_type}, event: {event}")
+                # Try to create session if it doesn't exist
+                try:
+                    await runner.session_service.create_session(
+                        app_name=app_name,
+                        user_id=str(user_id),
+                        session_id=session_id
+                    )
+                except Exception:
+                    pass  # Session might already exist
             
-            # Check for tool calls (ADK should handle these automatically, but we log them)
-            if hasattr(event, 'function_calls') or hasattr(event, 'tool_calls'):
-                logger.info(f"🔧 Tool call detected in event: {event}")
-            if hasattr(event, 'function_call'):
-                logger.info(f"🔧 Function call detected: {event.function_call}")
+            # Run agent (File Search is already configured in Agent)
+            # The ADK Runner automatically handles tool calls when tools are provided to the Agent
+            async for event in runner.run_async(
+                user_id=str(user_id),
+                session_id=session_id,
+                new_message=last_message
+            ):
+                # Log event type for debugging
+                event_type = type(event).__name__
+                logger.debug(f"🔍 ADK Event type: {event_type}, event: {event}")
+                
+                # Check for tool calls (ADK should handle these automatically, but we log them)
+                if hasattr(event, 'function_calls') or hasattr(event, 'tool_calls'):
+                    logger.info(f"🔧 Tool call detected in event: {event}")
+                if hasattr(event, 'function_call'):
+                    logger.info(f"🔧 Function call detected: {event.function_call}")
+                
+                # Extract text from events
+                if hasattr(event, 'content') and event.content:
+                    for content in event.content if isinstance(event.content, list) else [event.content]:
+                        if hasattr(content, 'parts') and content.parts:
+                            for part in content.parts:
+                                if hasattr(part, 'text') and part.text:
+                                    yield part.text
+                                elif isinstance(part, str):
+                                    yield part
+                        elif isinstance(content, str):
+                            yield content
+                
+                # Also check if event has text directly
+                if hasattr(event, 'text') and event.text:
+                    yield event.text
+        finally:
+            # Restore Vertex AI credentials if they were removed
+            if vertex_creds_removed and original_vertex_creds:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_vertex_creds
+                logger.info("🔧 Restored GOOGLE_APPLICATION_CREDENTIALS")
             
-            # Extract text from events
-            if hasattr(event, 'content') and event.content:
-                for content in event.content if isinstance(event.content, list) else [event.content]:
-                    if hasattr(content, 'parts') and content.parts:
-                        for part in content.parts:
-                            if hasattr(part, 'text') and part.text:
-                                yield part.text
-                            elif isinstance(part, str):
-                                yield part
-                    elif isinstance(content, str):
-                        yield content
-            
-            # Also check if event has text directly
-            if hasattr(event, 'text') and event.text:
-                yield event.text
+            # Restore other Vertex AI environment variables
+            for var_name, var_value in original_vertex_vars.items():
+                os.environ[var_name] = var_value
 
