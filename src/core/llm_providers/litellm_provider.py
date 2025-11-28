@@ -592,13 +592,15 @@ class LiteLLMProvider(LLMProvider):
                 # For Gemini 3 Pro, add thinking_level parameter (default: high)
                 # According to docs: https://ai.google.dev/gemini-api/docs/gemini-3
                 # This parameter is ONLY for Gemini 3 Pro models
-                if "gemini-3-pro" in normalized_model:
+                # Use the model name without prefix for checking (may have been stripped above)
+                model_name_for_check = litellm_params.get("model", normalized_model)
+                if "gemini-3-pro" in model_name_for_check:
                     # thinking_level: low (fast), high (deep reasoning, default)
                     # Can be passed via kwargs if needed, default is high
                     if "thinking_level" not in kwargs:
                         # Use high by default for Gemini 3 Pro (better reasoning)
                         litellm_params["thinking_level"] = "high"
-                        logger.info(f"Using thinking_level=high for {normalized_model} (default for Gemini 3 Pro)")
+                        logger.info(f"Using thinking_level=high for {model_name_for_check} (default for Gemini 3 Pro)")
                     else:
                         litellm_params["thinking_level"] = kwargs["thinking_level"]
                 else:
@@ -607,9 +609,10 @@ class LiteLLMProvider(LLMProvider):
                     if "thinking_level" in litellm_params:
                         del litellm_params["thinking_level"]
                 
-                logger.info(f"✅ Configured to use direct Gemini API (not Vertex AI) for {normalized_model}")
+                logger.info(f"✅ Configured to use direct Gemini API (not Vertex AI) for {litellm_params.get('model', normalized_model)}")
                 logger.info(f"   API Base: {litellm_params.get('api_base', 'default (direct API)')}")
-                print(f"🔧 Configurado para usar API direta do Gemini (não Vertex AI) para {normalized_model}")
+                logger.info(f"   Model: {litellm_params.get('model', normalized_model)}")
+                print(f"🔧 Configurado para usar API direta do Gemini (não Vertex AI) para {litellm_params.get('model', normalized_model)}")
             elif model.startswith("openai/"):
                 litellm_params["api_key"] = Config.OPENAI_API_KEY
             elif model.startswith("anthropic/"):
