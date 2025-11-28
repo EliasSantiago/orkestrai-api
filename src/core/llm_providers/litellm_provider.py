@@ -529,9 +529,6 @@ class LiteLLMProvider(LLMProvider):
             vertex_creds_removed = False
             
             if normalized_model.startswith("gemini/"):
-                # Check if Vertex AI credentials are available
-                has_vertex_ai_creds = "GOOGLE_APPLICATION_CREDENTIALS" in os.environ and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-                
                 # Models that are NOT available in Vertex AI (must use direct API)
                 # According to official docs: https://ai.google.dev/gemini-api/docs/pricing#gemini-3-pro-preview
                 # gemini-3-pro-preview is ONLY available via direct Gemini API (Google AI Studio)
@@ -540,6 +537,48 @@ class LiteLLMProvider(LLMProvider):
                 # Check if this model requires direct API
                 model_name_only = normalized_model.replace("gemini/", "")
                 requires_direct_api = any(model_required in model_name_only for model_required in models_require_direct_api)
+                
+                # Check if Vertex AI credentials are available AND valid (must be a file path)
+                # GOOGLE_APPLICATION_CREDENTIALS must point to a JSON file, not a key
+                has_vertex_ai_creds = False
+                vertex_creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+                if vertex_creds_path:
+                    # Check if it's a valid file path (not a key)
+                    # Valid paths typically contain "/" or "\" or start with "./" or are absolute paths
+                    is_file_path = (
+                        "/" in vertex_creds_path or 
+                        "\\" in vertex_creds_path or 
+                        vertex_creds_path.startswith("./") or
+                        os.path.isabs(vertex_creds_path) or
+                        vertex_creds_path.endswith(".json")
+                    )
+                    if is_file_path and os.path.isfile(vertex_creds_path):
+                        has_vertex_ai_creds = True
+                        logger.info(f"✅ Valid Vertex AI credentials file found: {vertex_creds_path}")
+                    else:
+                        # Not a valid file path - treat as invalid and use direct API
+                        logger.warning(f"⚠️ GOOGLE_APPLICATION_CREDENTIALS is not a valid file path: {vertex_creds_path}")
+                        logger.warning(f"   Vertex AI requires a JSON service account file, not a key")
+                        logger.warning(f"   Falling back to direct Gemini API (Google AI Studio)")
+                        has_vertex_ai_creds = False
+                
+                # CRITICAL: For models that require direct API (like gemini-3-pro-preview),
+                # ALWAYS remove Vertex AI credentials to ensure we use direct API
+                if requires_direct_api:
+                    vertex_env_var_names = [
+                        "GOOGLE_APPLICATION_CREDENTIALS",
+                        "GOOGLE_CLOUD_PROJECT",
+                        "GOOGLE_CLOUD_REGION",
+                        "GCLOUD_PROJECT",
+                    ]
+                    
+                    # Save original values and temporarily unset ALL Vertex AI environment variables
+                    for var_name in vertex_env_var_names:
+                        if var_name in os.environ:
+                            original_vertex_env_vars[var_name] = os.environ[var_name]
+                            del os.environ[var_name]
+                            vertex_creds_removed = True
+                            logger.info(f"Temporarily unset {var_name} to force direct Gemini API for {normalized_model}")
                 
                 if has_vertex_ai_creds and not requires_direct_api:
                     # Use Vertex AI for models that support it
@@ -565,25 +604,6 @@ class LiteLLMProvider(LLMProvider):
                     # According to LiteLLM docs: https://docs.litellm.ai/docs/providers/gemini
                     # - gemini/ prefix = Google AI Studio (direct API) - uses GOOGLE_API_KEY
                     litellm_params["api_key"] = Config.GOOGLE_API_KEY
-                    
-                    # For models that require direct API (like gemini-3-pro-preview),
-                    # or when Vertex AI credentials are not available,
-                    # remove Vertex AI credentials to ensure we use direct API
-                    if has_vertex_ai_creds and requires_direct_api:
-                        vertex_env_var_names = [
-                            "GOOGLE_APPLICATION_CREDENTIALS",
-                            "GOOGLE_CLOUD_PROJECT",
-                            "GOOGLE_CLOUD_REGION",
-                            "GCLOUD_PROJECT",
-                        ]
-                        
-                        # Save original values and temporarily unset ALL Vertex AI environment variables
-                        for var_name in vertex_env_var_names:
-                            if var_name in os.environ:
-                                original_vertex_env_vars[var_name] = os.environ[var_name]
-                                del os.environ[var_name]
-                                vertex_creds_removed = True
-                                logger.info(f"Temporarily unset {var_name} to force direct Gemini API")
                     
                     # Force direct Gemini API endpoint
                     # The direct API endpoint is: https://generativelanguage.googleapis.com
@@ -765,13 +785,33 @@ class LiteLLMProvider(LLMProvider):
                                 "stream": False,
                             }
                             if normalized_model.startswith("gemini/"):
-                                # Check if Vertex AI credentials are available
-                                has_vertex_ai_creds = "GOOGLE_APPLICATION_CREDENTIALS" in os.environ and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-                                
                                 # Models that are NOT available in Vertex AI (must use direct API)
                                 models_require_direct_api = ["gemini-3-pro-preview"]
                                 model_name_only = normalized_model.replace("gemini/", "")
                                 requires_direct_api = any(model_required in model_name_only for model_required in models_require_direct_api)
+                                
+                                # Check if Vertex AI credentials are available AND valid (must be a file path)
+                                has_vertex_ai_creds = False
+                                vertex_creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+                                if vertex_creds_path and not requires_direct_api:
+                                    # Check if it's a valid file path
+                                    is_file_path = (
+                                        "/" in vertex_creds_path or 
+                                        "\\" in vertex_creds_path or 
+                                        vertex_creds_path.startswith("./") or
+                                        os.path.isabs(vertex_creds_path) or
+                                        vertex_creds_path.endswith(".json")
+                                    )
+                                    if is_file_path and os.path.isfile(vertex_creds_path):
+                                        has_vertex_ai_creds = True
+                                
+                                # CRITICAL: For models that require direct API, ALWAYS use direct API
+                                if requires_direct_api:
+                                    # Remove Vertex AI credentials temporarily
+                                    if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+                                        if "GOOGLE_APPLICATION_CREDENTIALS" not in original_vertex_env_vars:
+                                            original_vertex_env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+                                        del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
                                 
                                 if has_vertex_ai_creds and not requires_direct_api:
                                     # Use Vertex AI
