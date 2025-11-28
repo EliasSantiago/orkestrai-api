@@ -557,28 +557,17 @@ class LiteLLMProvider(LLMProvider):
                 # This ensures we always use the direct API, not Vertex AI
                 # The direct API endpoint is: https://generativelanguage.googleapis.com
                 # This is the SAME endpoint for ALL Gemini models (gemini-2.5-flash, gemini-3-pro-preview, etc.)
+                # IMPORTANT: Keep the 'gemini/' prefix in the model name - LiteLLM needs it to identify the provider
+                # The api_base will override the default endpoint, but the prefix is still needed
                 litellm_params["api_base"] = "https://generativelanguage.googleapis.com"
                 
-                # IMPORTANT: When using api_base with direct Gemini API, LiteLLM may need the model name
-                # WITHOUT the 'gemini/' prefix. The api_base already specifies the provider.
-                # However, we'll try with the prefix first, and if it fails, we can strip it.
-                # For now, let's try WITHOUT the prefix when using api_base directly.
-                # Strip 'gemini/' prefix when using direct API with api_base
-                if normalized_model.startswith("gemini/"):
-                    # Remove prefix for direct API calls
-                    model_name_without_prefix = normalized_model.replace("gemini/", "", 1)
-                    litellm_params["model"] = model_name_without_prefix
-                    logger.info(f"🔄 Removed 'gemini/' prefix for direct API: {normalized_model} → {model_name_without_prefix}")
-                    print(f"🔄 Removido prefixo 'gemini/' para API direta: {normalized_model} → {model_name_without_prefix}")
-                
-                logger.info(f"🔧 Using direct Gemini API for {litellm_params['model']} (not Vertex AI)")
-                print(f"🔧 Usando API direta do Gemini para {litellm_params['model']} (não Vertex AI)")
+                logger.info(f"🔧 Using direct Gemini API for {normalized_model} (not Vertex AI)")
+                print(f"🔧 Usando API direta do Gemini para {normalized_model} (não Vertex AI)")
                 
                 # For Gemini 3 Pro, add thinking_level parameter (default: high)
                 # According to docs: https://ai.google.dev/gemini-api/docs/gemini-3
                 # This parameter is ONLY for Gemini 3 Pro models
-                # Use the model name without prefix for checking (may have been stripped above)
-                model_name_for_check = litellm_params.get("model", normalized_model)
+                model_name_for_check = normalized_model
                 if "gemini-3-pro" in model_name_for_check:
                     # thinking_level: low (fast), high (deep reasoning, default)
                     # Can be passed via kwargs if needed, default is high
@@ -594,10 +583,10 @@ class LiteLLMProvider(LLMProvider):
                     if "thinking_level" in litellm_params:
                         del litellm_params["thinking_level"]
                 
-                logger.info(f"✅ Configured to use direct Gemini API (not Vertex AI) for {litellm_params.get('model', normalized_model)}")
+                logger.info(f"✅ Configured to use direct Gemini API (not Vertex AI) for {normalized_model}")
                 logger.info(f"   API Base: {litellm_params.get('api_base', 'default (direct API)')}")
-                logger.info(f"   Model: {litellm_params.get('model', normalized_model)}")
-                print(f"🔧 Configurado para usar API direta do Gemini (não Vertex AI) para {litellm_params.get('model', normalized_model)}")
+                logger.info(f"   Model: {normalized_model}")
+                print(f"🔧 Configurado para usar API direta do Gemini (não Vertex AI) para {normalized_model}")
             elif model.startswith("openai/"):
                 litellm_params["api_key"] = Config.OPENAI_API_KEY
             elif model.startswith("anthropic/"):
