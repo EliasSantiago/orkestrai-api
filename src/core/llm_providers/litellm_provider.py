@@ -555,9 +555,10 @@ class LiteLLMProvider(LLMProvider):
                         logger.info(f"Temporarily unset {var_name} to force direct Gemini API")
                 
                 # CRITICAL: Force direct Gemini API by explicitly setting api_base
-                # For gemini-3-pro-preview, MUST use direct API (not Vertex AI)
+                # For gemini-3-pro-preview and gemini-3-pro, MUST use direct API (not Vertex AI)
                 # LiteLLM will use Vertex AI if it detects credentials, even with gemini/ prefix
-                # Solution: Explicitly set api_base to direct Gemini API endpoint
+                # Solution: Explicitly set api_base to direct Gemini API endpoint for ALL Gemini models
+                # This ensures we always use the direct API, not Vertex AI
                 if "gemini-3-pro-preview" in normalized_model or "gemini-3-pro" in normalized_model:
                     # Force direct Gemini API endpoint (Google AI Studio)
                     # This ensures we use https://generativelanguage.googleapis.com instead of Vertex AI
@@ -565,9 +566,10 @@ class LiteLLMProvider(LLMProvider):
                     logger.info(f"🔧 Forcing direct Gemini API for {normalized_model} (not Vertex AI)")
                     print(f"🔧 Forçando API direta do Gemini para {normalized_model} (não Vertex AI)")
                 else:
-                    # For other Gemini models, remove any api_base that might point to Vertex AI
-                    if "api_base" in litellm_params:
-                        del litellm_params["api_base"]
+                    # For other Gemini models, also force direct API to avoid Vertex AI issues
+                    # This prevents LiteLLM from trying Vertex AI first
+                    litellm_params["api_base"] = "https://generativelanguage.googleapis.com"
+                    logger.info(f"🔧 Using direct Gemini API for {normalized_model} (not Vertex AI)")
                 
                 # Ensure we're using the direct Gemini API endpoint
                 # The gemini/ prefix with api_base set to direct API ensures we don't use Vertex AI
@@ -733,6 +735,9 @@ class LiteLLMProvider(LLMProvider):
                             }
                             if normalized_model.startswith("gemini/"):
                                 non_stream_params["api_key"] = Config.GOOGLE_API_KEY
+                                # Force direct Gemini API for Gemini 3 Pro models
+                                if "gemini-3-pro-preview" in normalized_model or "gemini-3-pro" in normalized_model:
+                                    non_stream_params["api_base"] = "https://generativelanguage.googleapis.com"
                                 if "gemini-3-pro" in normalized_model:
                                     non_stream_params["thinking_level"] = "high"
                             response = await acompletion(**non_stream_params)
