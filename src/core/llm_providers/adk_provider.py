@@ -84,10 +84,14 @@ class ADKProvider(LLMProvider):
                             except Exception as e:
                                 logger.warning(f"Could not decode file {file_part.file_name}: {e}")
                 
+                # Map "assistant" role to "model" (ADK/Gemini API requirement)
+                # ADK expects "user" and "model" roles, not "assistant"
+                adk_role = "model" if msg.role == "assistant" else msg.role
+                
                 conversation.append(
                     types.Content(
                         parts=parts,
-                        role=msg.role
+                        role=adk_role
                     )
                 )
         
