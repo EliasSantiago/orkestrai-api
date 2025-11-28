@@ -191,9 +191,12 @@ class ADKProvider(LLMProvider):
                 system_instruction=file_search_instruction
             )
             
+            # Normalize model name (remove provider prefix if present)
+            model_name = model.replace("gemini/", "").replace("vertex_ai/", "")
+            
             # Stream response
             response = client.models.generate_content_stream(
-                model=model,
+                model=model_name,
                 contents=gemini_messages,
                 config=config
             )
