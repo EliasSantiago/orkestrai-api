@@ -54,13 +54,6 @@ class LiteLLMProvider(LLMProvider):
         if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
             logger.info("GOOGLE_APPLICATION_CREDENTIALS detected - will be temporarily removed for Gemini API calls")
         
-        # Force direct Gemini API (not Vertex AI) for all Gemini models
-        # This ensures we always use the direct API endpoint
-        import os
-        # Remove Vertex AI detection by ensuring these are not set during initialization
-        if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
-            logger.info("GOOGLE_APPLICATION_CREDENTIALS detected - will be temporarily removed for Gemini API calls")
-        
         # Configure SSL verification for environments with self-signed certificates
         if not Config.VERIFY_SSL:
             logger.warning("⚠️  SSL verification is DISABLED. This is insecure and should only be used in development!")
@@ -530,7 +523,7 @@ class LiteLLMProvider(LLMProvider):
                 litellm_params["presence_penalty"] = kwargs["presence_penalty"]
             
             # Configure API keys based on model provider
-            import os
+            # Note: 'os' is already imported at the top of the file
             vertex_creds_key = "GOOGLE_APPLICATION_CREDENTIALS"
             original_vertex_env_vars = {}
             vertex_creds_removed = False
