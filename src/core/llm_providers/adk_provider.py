@@ -336,36 +336,46 @@ class ADKProvider(LLMProvider):
             
             # Run agent (File Search is already configured in Agent)
             # The ADK Runner automatically handles tool calls when tools are provided to the Agent
-            async for event in runner.run_async(
-                user_id=str(user_id),
-                session_id=session_id,
-                new_message=last_message
-            ):
-                # Log event type for debugging
-                event_type = type(event).__name__
-                logger.debug(f"🔍 ADK Event type: {event_type}, event: {event}")
+            try:
+                async for event in runner.run_async(
+                    user_id=str(user_id),
+                    session_id=session_id,
+                    new_message=last_message
+                ):
+                    # Log event type for debugging
+                    event_type = type(event).__name__
+                    logger.debug(f"🔍 ADK Event type: {event_type}, event: {event}")
+                    
+                    # Check for tool calls (ADK should handle these automatically, but we log them)
+                    if hasattr(event, 'function_calls') or hasattr(event, 'tool_calls'):
+                        logger.info(f"🔧 Tool call detected in event: {event}")
+                    if hasattr(event, 'function_call'):
+                        logger.info(f"🔧 Function call detected: {event.function_call}")
+                    
+                    # Extract text from events
+                    if hasattr(event, 'content') and event.content:
+                        for content in event.content if isinstance(event.content, list) else [event.content]:
+                            if hasattr(content, 'parts') and content.parts:
+                                for part in content.parts:
+                                    if hasattr(part, 'text') and part.text:
+                                        yield part.text
+                                    elif isinstance(part, str):
+                                        yield part
+                            elif isinstance(content, str):
+                                yield content
+                    
+                    # Also check if event has text directly
+                    if hasattr(event, 'text') and event.text:
+                        yield event.text
+            except Exception as e:
+                # Capture and re-raise errors from ADK so they can be handled by the use case
+                error_str = str(e)
+                error_type = type(e).__name__
                 
-                # Check for tool calls (ADK should handle these automatically, but we log them)
-                if hasattr(event, 'function_calls') or hasattr(event, 'tool_calls'):
-                    logger.info(f"🔧 Tool call detected in event: {event}")
-                if hasattr(event, 'function_call'):
-                    logger.info(f"🔧 Function call detected: {event.function_call}")
+                logger.error(f"❌ ADK Provider error: {error_type}: {error_str}")
                 
-                # Extract text from events
-                if hasattr(event, 'content') and event.content:
-                    for content in event.content if isinstance(event.content, list) else [event.content]:
-                        if hasattr(content, 'parts') and content.parts:
-                            for part in content.parts:
-                                if hasattr(part, 'text') and part.text:
-                                    yield part.text
-                                elif isinstance(part, str):
-                                    yield part
-                        elif isinstance(content, str):
-                            yield content
-                
-                # Also check if event has text directly
-                if hasattr(event, 'text') and event.text:
-                    yield event.text
+                # Re-raise the error so the use case can handle it (fallback, retry, etc.)
+                raise
         finally:
             # Restore Vertex AI credentials if they were removed
             if vertex_creds_removed and original_vertex_creds:
