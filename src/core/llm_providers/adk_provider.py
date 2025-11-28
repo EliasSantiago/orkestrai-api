@@ -119,12 +119,34 @@ class ADKProvider(LLMProvider):
             # Use Gemini client directly for File Search (ADK doesn't support it)
             logger.info(f"File Search enabled with {len(file_search_stores)} stores - using Gemini client directly")
             
-            # Create Gemini client
-            if not Config.GOOGLE_API_KEY:
-                raise ValueError("GOOGLE_API_KEY not configured")
-            client = genai.Client(api_key=Config.GOOGLE_API_KEY)
+            # CRITICAL: Remove Vertex AI credentials to force direct Gemini API
+            # Google genai.Client will use Vertex AI if GOOGLE_APPLICATION_CREDENTIALS is present
+            original_vertex_creds = None
+            vertex_creds_removed = False
+            if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+                original_vertex_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+                del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+                vertex_creds_removed = True
+                logger.info("🔧 Temporarily removed GOOGLE_APPLICATION_CREDENTIALS to force direct Gemini API")
             
-            # Create File Search tool
+            # Also remove other Vertex AI environment variables
+            vertex_env_vars = ["GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION", "GCLOUD_PROJECT"]
+            original_vertex_vars = {}
+            for var_name in vertex_env_vars:
+                if var_name in os.environ:
+                    original_vertex_vars[var_name] = os.environ[var_name]
+                    del os.environ[var_name]
+            
+            try:
+                # Create Gemini client with explicit API key to force direct API
+                if not Config.GOOGLE_API_KEY:
+                    raise ValueError("GOOGLE_API_KEY not configured")
+                
+                # Configure genai to use direct API
+                genai.configure(api_key=Config.GOOGLE_API_KEY)
+                client = genai.Client(api_key=Config.GOOGLE_API_KEY)
+                
+                # Create File Search tool
             file_search_tool = types.Tool(
                 file_search=types.FileSearch(
                     file_search_store_names=file_search_stores
@@ -211,14 +233,43 @@ class ADKProvider(LLMProvider):
         # Normalize model name (remove provider prefix if present)
         model_name = model.replace("gemini/", "").replace("vertex_ai/", "")
         
-        logger.info(f"🔧 Creating ADK Agent with model: {model_name} and {len(adk_tools)} tools")
-        agent = Agent(
-            model=model_name,
-            name=agent_name,
-            description=agent_description,
-            instruction=instruction,
-            tools=adk_tools  # Only callable functions here
-        )
+        # CRITICAL: Remove Vertex AI credentials to force direct Gemini API
+        # Google ADK Agent will use Vertex AI if GOOGLE_APPLICATION_CREDENTIALS is present
+        # We need to remove it temporarily to force direct API (Google AI Studio)
+        original_vertex_creds = None
+        vertex_creds_removed = False
+        if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+            original_vertex_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+            vertex_creds_removed = True
+            logger.info("🔧 Temporarily removed GOOGLE_APPLICATION_CREDENTIALS to force direct Gemini API")
+        
+        # Also remove other Vertex AI environment variables
+        vertex_env_vars = ["GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION", "GCLOUD_PROJECT"]
+        original_vertex_vars = {}
+        for var_name in vertex_env_vars:
+            if var_name in os.environ:
+                original_vertex_vars[var_name] = os.environ[var_name]
+                del os.environ[var_name]
+        
+        try:
+            logger.info(f"🔧 Creating ADK Agent with model: {model_name} and {len(adk_tools)} tools")
+            logger.info(f"   Using direct Gemini API (GOOGLE_API_KEY)")
+            
+            # Configure genai client explicitly to use direct API
+            if not Config.GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY not configured")
+            
+            # Initialize genai client with API key to ensure direct API usage
+            genai.configure(api_key=Config.GOOGLE_API_KEY)
+            
+            agent = Agent(
+                model=model_name,
+                name=agent_name,
+                description=agent_description,
+                instruction=instruction,
+                tools=adk_tools  # Only callable functions here
+            )
         logger.info(f"✅ ADK Agent created successfully with tools: {[getattr(t, '__name__', str(t)) for t in adk_tools]}")
         
         # Inject context if available (for conversation history)
