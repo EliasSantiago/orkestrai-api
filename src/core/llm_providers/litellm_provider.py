@@ -454,10 +454,18 @@ class LiteLLMProvider(LLMProvider):
         """
         try:
             # Normalize model name (e.g., gemini-3-pro -> gemini-3-pro-preview)
+            # IMPORTANT: gemini-3-pro is NOT a valid model name in the API
+            # It must be either gemini-3-pro-preview (preview) or gemini-3-pro (stable, when available)
+            # For now, we map gemini-3-pro to gemini-3-pro-preview since stable is not yet available
             model_aliases = {
                 "gemini/gemini-3-pro": "gemini/gemini-3-pro-preview",
             }
             normalized_model = model_aliases.get(model, model)
+            
+            # Log model normalization
+            if normalized_model != model:
+                logger.info(f"🔄 Model normalized: {model} → {normalized_model}")
+                print(f"🔄 Modelo normalizado: {model} → {normalized_model}")
             
             # Convert messages to LiteLLM format
             logger.info(f"🔄 Converting messages for model: {normalized_model}")
@@ -735,9 +743,8 @@ class LiteLLMProvider(LLMProvider):
                             }
                             if normalized_model.startswith("gemini/"):
                                 non_stream_params["api_key"] = Config.GOOGLE_API_KEY
-                                # Force direct Gemini API for Gemini 3 Pro models
-                                if "gemini-3-pro-preview" in normalized_model or "gemini-3-pro" in normalized_model:
-                                    non_stream_params["api_base"] = "https://generativelanguage.googleapis.com"
+                                # Force direct Gemini API for all Gemini models (not Vertex AI)
+                                non_stream_params["api_base"] = "https://generativelanguage.googleapis.com"
                                 if "gemini-3-pro" in normalized_model:
                                     non_stream_params["thinking_level"] = "high"
                             response = await acompletion(**non_stream_params)
