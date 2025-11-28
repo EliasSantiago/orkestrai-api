@@ -733,9 +733,10 @@ class LiteLLMProvider(LLMProvider):
                             }
                             if normalized_model.startswith("gemini/"):
                                 non_stream_params["api_key"] = Config.GOOGLE_API_KEY
-                                # Force direct Gemini API for ALL Gemini models (same endpoint for all)
-                                # IMPORTANT: Keep the 'gemini/' prefix - LiteLLM needs it to identify the provider
-                                non_stream_params["api_base"] = "https://generativelanguage.googleapis.com"
+                                # Force direct Gemini API for Gemini 3 Pro Preview only
+                                # For other models, let LiteLLM use default endpoint
+                                if "gemini-3-pro-preview" in normalized_model:
+                                    non_stream_params["api_base"] = "https://generativelanguage.googleapis.com"
                                 # Add thinking_level ONLY for Gemini 3 Pro models
                                 if "gemini-3-pro" in normalized_model:
                                     non_stream_params["thinking_level"] = "high"
