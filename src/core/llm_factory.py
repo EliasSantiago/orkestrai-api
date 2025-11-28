@@ -1,12 +1,15 @@
 """Factory for creating LLM providers.
 
-Architecture: LiteLLM as the ONLY unified proxy.
-All models (Gemini, OpenAI, Claude, Ollama, etc.) are routed through LiteLLM.
+Architecture: 
+- Google ADK (direct) for Gemini models
+- LiteLLM for other providers (OpenAI, Claude, Ollama, etc.)
 """
 
 from typing import Optional, List
 from src.core.llm_provider import LLMProvider
+from src.core.llm_providers.adk_provider import ADKProvider
 from src.core.llm_providers.litellm_provider import LiteLLMProvider
+from src.config import Config
 
 
 class LLMFactory:
@@ -19,35 +22,45 @@ class LLMFactory:
         """
         Get list of available providers.
         
-        ARCHITECTURE CHANGE (2025-11-12):
-        ===================================
-        We use LiteLLM as the ONLY unified proxy for all LLM providers.
+        ARCHITECTURE (2025-11-27):
+        ===========================
+        - Google ADK (direct) for Gemini models - uses Google ADK SDK directly
+        - LiteLLM for other providers (OpenAI, Claude, Ollama, etc.)
         
-        LiteLLM provides:
-        - Unified interface for 100+ LLM providers (Gemini, OpenAI, Claude, Ollama, etc.)
-        - Automatic retries and fallbacks
-        - Load balancing
-        - Cost tracking
-        - Observability
+        This ensures:
+        - Gemini models use native Google ADK (better compatibility, no LiteLLM issues)
+        - Other models use LiteLLM (unified interface for 100+ providers)
+        - Automatic retries and fallbacks via LiteLLM for non-Gemini models
+        - Cost tracking and observability
         
         Requirements:
-        - Set LITELLM_ENABLED=true in .env
+        - Set LITELLM_ENABLED=true in .env (for non-Gemini models)
         - Configure API keys (GOOGLE_API_KEY, OPENAI_API_KEY, etc.)
-        - Use model format: "provider/model" (e.g., "gemini/gemini-2.0-flash-exp")
+        - Gemini models: use format "gemini/gemini-3-pro-preview" or just "gemini-3-pro-preview"
+        - Other models: use format "provider/model" (e.g., "openai/gpt-4o")
         
         Documentation: docs/arquitetura/litellm/README.md
         """
         if cls._providers is None:
             cls._providers = []
             
-            # LiteLLM - ÚNICO proxy unificado para todos os providers
-            litellm_provider = LiteLLMProvider()
-            cls._providers.append(litellm_provider)
+            # Google ADK - Direct provider for Gemini models (priority)
+            # This ensures Gemini models use native Google ADK SDK, avoiding LiteLLM issues
+            adk_provider = ADKProvider()
+            cls._providers.append(adk_provider)
+            print("✓ Google ADK provider initialized (direct Gemini SDK)")
+            print("  → Gemini models will use Google ADK directly")
+            print("  → Supported: gemini-3-pro-preview, gemini-2.5-pro, gemini-2.5-flash, etc.")
             
-            print("✓ LiteLLM provider initialized (unified LLM gateway)")
-            print("  → All models will be routed through LiteLLM")
-            print("  → Supported: Gemini, OpenAI, Claude, Ollama, Azure, and 100+ more")
-            print("  → Documentation: docs/arquitetura/litellm/README.md")
+            # LiteLLM - For other providers (OpenAI, Claude, Ollama, etc.)
+            if Config.LITELLM_ENABLED:
+                litellm_provider = LiteLLMProvider()
+                cls._providers.append(litellm_provider)
+                print("✓ LiteLLM provider initialized (for non-Gemini models)")
+                print("  → Other models (OpenAI, Claude, Ollama) will be routed through LiteLLM")
+                print("  → Supported: OpenAI, Claude, Ollama, Azure, and 100+ more")
+            else:
+                print("⚠ LiteLLM is disabled - only Gemini models will work")
         
         return cls._providers
     

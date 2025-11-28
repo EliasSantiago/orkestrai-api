@@ -19,6 +19,8 @@ class ADKProvider(LLMProvider):
     
     def __init__(self):
         self.supported_models = [
+            "gemini-3-pro-preview",  # Latest preview model
+            "gemini-2.5-pro",
             "gemini-2.5-flash",  # Recommended for File Search (RAG)
             "gemini-2.0-flash-exp",
             "gemini-2.0-flash-thinking-exp",
@@ -31,7 +33,9 @@ class ADKProvider(LLMProvider):
     
     def supports_model(self, model: str) -> bool:
         """Check if model is a Gemini model."""
-        return model.startswith("gemini-") or model in self.supported_models
+        # Remove provider prefix if present (e.g., "gemini/gemini-3-pro-preview" -> "gemini-3-pro-preview")
+        model_name = model.replace("gemini/", "").replace("vertex_ai/", "")
+        return model_name.startswith("gemini-") or model_name in self.supported_models
     
     def get_supported_models(self) -> List[str]:
         """Get list of supported Gemini models."""
@@ -201,9 +205,12 @@ class ADKProvider(LLMProvider):
             return
         
         # No File Search - use ADK as normal
-        logger.info(f"🔧 Creating ADK Agent with {len(adk_tools)} tools")
+        # Normalize model name (remove provider prefix if present)
+        model_name = model.replace("gemini/", "").replace("vertex_ai/", "")
+        
+        logger.info(f"🔧 Creating ADK Agent with model: {model_name} and {len(adk_tools)} tools")
         agent = Agent(
-            model=model,
+            model=model_name,
             name=agent_name,
             description=agent_description,
             instruction=instruction,
