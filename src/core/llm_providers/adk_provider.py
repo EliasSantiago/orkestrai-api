@@ -147,86 +147,95 @@ class ADKProvider(LLMProvider):
                 client = genai.Client(api_key=Config.GOOGLE_API_KEY)
                 
                 # Create File Search tool
-            file_search_tool = types.Tool(
-                file_search=types.FileSearch(
-                    file_search_store_names=file_search_stores
-                )
-            )
-            
-            # Prepare conversation for Gemini API
-            # Convert messages to Gemini format
-            # Gemini API only accepts "user" and "model" roles (not "assistant")
-            gemini_messages = []
-            file_search_instruction = None
-            for msg in messages:
-                if msg.role == "system":
-                    # System messages become the instruction
-                    file_search_instruction = msg.content
-                else:
-                    # Map "assistant" to "model" (Gemini API requirement)
-                    gemini_role = "model" if msg.role == "assistant" else msg.role
-                    
-                    # Build parts for the message (text + files)
-                    parts = [types.Part(text=msg.content)]
-                    
-                    # Add file parts if present
-                    if msg.files:
-                        for file_part in msg.files:
-                            if file_part.type == "image":
-                                # Decode base64 image
-                                image_data = base64.b64decode(file_part.data)
-                                parts.append(types.Part(
-                                    inline_data=types.Blob(
-                                        data=image_data,
-                                        mime_type=file_part.mime_type or "image/png"
-                                    )
-                                ))
-                            elif file_part.type == "pdf" or file_part.mime_type == "application/pdf":
-                                logger.warning(f"PDF files not yet fully supported in ADK provider: {file_part.file_name}")
-                            else:
-                                try:
-                                    text_content = base64.b64decode(file_part.data).decode('utf-8')
-                                    parts.append(types.Part(text=f"\n[File: {file_part.file_name}]\n{text_content}"))
-                                except Exception as e:
-                                    logger.warning(f"Could not decode file {file_part.file_name}: {e}")
-                    
-                    gemini_messages.append(
-                        types.Content(
-                            parts=parts,
-                            role=gemini_role
-                        )
+                file_search_tool = types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=file_search_stores
                     )
-            
-            # Use instruction from kwargs if no system message
-            if not file_search_instruction:
-                file_search_instruction = kwargs.get("instruction", "You are a helpful assistant.")
-            
-            # Get last user message
-            if gemini_messages:
-                last_message = gemini_messages[-1]
-            else:
-                raise ValueError("No messages provided")
-            
-            # Generate content with File Search
-            config = types.GenerateContentConfig(
-                tools=[file_search_tool],
-                system_instruction=file_search_instruction
-            )
-            
-            # Normalize model name (remove provider prefix if present)
-            model_name = model.replace("gemini/", "").replace("vertex_ai/", "")
-            
-            # Stream response
-            response = client.models.generate_content_stream(
-                model=model_name,
-                contents=gemini_messages,
-                config=config
-            )
-            
-            # Yield text chunks
-            for chunk in response:
-                if chunk.text:
-                    yield chunk.text
+                )
+                
+                # Prepare conversation for Gemini API
+                # Convert messages to Gemini format
+                # Gemini API only accepts "user" and "model" roles (not "assistant")
+                gemini_messages = []
+                file_search_instruction = None
+                for msg in messages:
+                    if msg.role == "system":
+                        # System messages become the instruction
+                        file_search_instruction = msg.content
+                    else:
+                        # Map "assistant" to "model" (Gemini API requirement)
+                        gemini_role = "model" if msg.role == "assistant" else msg.role
+                        
+                        # Build parts for the message (text + files)
+                        parts = [types.Part(text=msg.content)]
+                        
+                        # Add file parts if present
+                        if msg.files:
+                            for file_part in msg.files:
+                                if file_part.type == "image":
+                                    # Decode base64 image
+                                    image_data = base64.b64decode(file_part.data)
+                                    parts.append(types.Part(
+                                        inline_data=types.Blob(
+                                            data=image_data,
+                                            mime_type=file_part.mime_type or "image/png"
+                                        )
+                                    ))
+                                elif file_part.type == "pdf" or file_part.mime_type == "application/pdf":
+                                    logger.warning(f"PDF files not yet fully supported in ADK provider: {file_part.file_name}")
+                                else:
+                                    try:
+                                        text_content = base64.b64decode(file_part.data).decode('utf-8')
+                                        parts.append(types.Part(text=f"\n[File: {file_part.file_name}]\n{text_content}"))
+                                    except Exception as e:
+                                        logger.warning(f"Could not decode file {file_part.file_name}: {e}")
+                        
+                        gemini_messages.append(
+                            types.Content(
+                                parts=parts,
+                                role=gemini_role
+                            )
+                        )
+                
+                # Use instruction from kwargs if no system message
+                if not file_search_instruction:
+                    file_search_instruction = kwargs.get("instruction", "You are a helpful assistant.")
+                
+                # Get last user message
+                if gemini_messages:
+                    last_message = gemini_messages[-1]
+                else:
+                    raise ValueError("No messages provided")
+                
+                # Generate content with File Search
+                config = types.GenerateContentConfig(
+                    tools=[file_search_tool],
+                    system_instruction=file_search_instruction
+                )
+                
+                # Normalize model name (remove provider prefix if present)
+                model_name = model.replace("gemini/", "").replace("vertex_ai/", "")
+                
+                # Stream response
+                response = client.models.generate_content_stream(
+                    model=model_name,
+                    contents=gemini_messages,
+                    config=config
+                )
+                
+                # Yield text chunks
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+            finally:
+                # Restore Vertex AI credentials if they were removed
+                if vertex_creds_removed and original_vertex_creds:
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_vertex_creds
+                    logger.info("🔧 Restored GOOGLE_APPLICATION_CREDENTIALS")
+                
+                # Restore other Vertex AI environment variables
+                for var_name, var_value in original_vertex_vars.items():
+                    os.environ[var_name] = var_value
             return
         
         # No File Search - use ADK as normal
