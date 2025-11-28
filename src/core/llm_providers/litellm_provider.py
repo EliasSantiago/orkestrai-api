@@ -550,16 +550,23 @@ class LiteLLMProvider(LLMProvider):
                         vertex_creds_removed = True
                         logger.info(f"Temporarily unset {var_name} to force direct Gemini API")
                 
-                # CRITICAL: Force direct Gemini API by explicitly setting api_base
-                # For ALL Gemini models, we MUST use direct API (not Vertex AI)
+                # CRITICAL: Force direct Gemini API (not Vertex AI)
                 # LiteLLM will use Vertex AI if it detects credentials, even with gemini/ prefix
-                # Solution: Explicitly set api_base to direct Gemini API endpoint for ALL Gemini models
-                # This ensures we always use the direct API, not Vertex AI
-                # The direct API endpoint is: https://generativelanguage.googleapis.com
-                # This is the SAME endpoint for ALL Gemini models (gemini-2.5-flash, gemini-3-pro-preview, etc.)
+                # Solution: Remove Vertex AI credentials (already done above) and conditionally set api_base
+                # When using 'gemini/' prefix WITHOUT Vertex AI credentials, LiteLLM automatically uses direct API
+                # We only set api_base explicitly for gemini-3-pro-preview which requires it
+                # The direct API endpoint is: https://generativelanguage.googleapis.com (LiteLLM default)
                 # IMPORTANT: Keep the 'gemini/' prefix in the model name - LiteLLM needs it to identify the provider
-                # The api_base will override the default endpoint, but the prefix is still needed
-                litellm_params["api_base"] = "https://generativelanguage.googleapis.com"
+                # Only set api_base for Gemini 3 Pro Preview if explicitly needed
+                if "gemini-3-pro-preview" in normalized_model:
+                    # For Gemini 3 Pro Preview, explicitly set api_base to ensure direct API
+                    # This model is ONLY available via direct API, not Vertex AI
+                    litellm_params["api_base"] = "https://generativelanguage.googleapis.com"
+                    logger.info(f"🔧 Explicitly setting api_base for {normalized_model} (direct API only)")
+                else:
+                    # For other Gemini models, don't set api_base - let LiteLLM use default
+                    # This avoids potential model name resolution issues
+                    logger.info(f"🔧 Using default LiteLLM endpoint for {normalized_model} (direct API)")
                 
                 logger.info(f"🔧 Using direct Gemini API for {normalized_model} (not Vertex AI)")
                 print(f"🔧 Usando API direta do Gemini para {normalized_model} (não Vertex AI)")
