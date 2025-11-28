@@ -89,7 +89,6 @@ class LiteLLMProvider(LLMProvider):
                 # Latest models (2025)
                 # Gemini 3 Pro - Preview version (according to official docs: gemini-3-pro-preview)
                 "gemini/gemini-3-pro-preview",
-                "gemini/gemini-3-pro",  # Alias for convenience (will map to preview)
                 "gemini/gemini-2.5-pro",
                 "gemini/gemini-2.5-flash",
                 # Experimental models
@@ -276,11 +275,8 @@ class LiteLLMProvider(LLMProvider):
         Returns:
             True if model is supported, False otherwise
         """
-        # Normalize model aliases (e.g., gemini-3-pro -> gemini-3-pro-preview)
-        model_aliases = {
-            "gemini/gemini-3-pro": "gemini/gemini-3-pro-preview",
-        }
-        normalized_model = model_aliases.get(model, model)
+        # No model aliases needed - use exact model names
+        normalized_model = model
         
         # Direct match in supported models list (check both original and normalized)
         if model in self.supported_models or normalized_model in self.supported_models:
@@ -453,19 +449,8 @@ class LiteLLMProvider(LLMProvider):
             - Streaming is enabled by default
         """
         try:
-            # Normalize model name (e.g., gemini-3-pro -> gemini-3-pro-preview)
-            # IMPORTANT: gemini-3-pro is NOT a valid model name in the API
-            # It must be either gemini-3-pro-preview (preview) or gemini-3-pro (stable, when available)
-            # For now, we map gemini-3-pro to gemini-3-pro-preview since stable is not yet available
-            model_aliases = {
-                "gemini/gemini-3-pro": "gemini/gemini-3-pro-preview",
-            }
-            normalized_model = model_aliases.get(model, model)
-            
-            # Log model normalization
-            if normalized_model != model:
-                logger.info(f"🔄 Model normalized: {model} → {normalized_model}")
-                print(f"🔄 Modelo normalizado: {model} → {normalized_model}")
+            # Use model name as-is (no normalization needed)
+            normalized_model = model
             
             # Convert messages to LiteLLM format
             logger.info(f"🔄 Converting messages for model: {normalized_model}")

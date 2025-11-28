@@ -15,7 +15,6 @@ TOP_MODELS = {
     ],
     "gemini": [
         "gemini/gemini-3-pro-preview",  # Latest Pro model (Preview - testing phase)
-        "gemini/gemini-3-pro",           # Latest Pro model (Stable - when available)
         "gemini/gemini-2.5-pro",         # Pro version with advanced capabilities
         "gemini/gemini-2.5-flash",       # Fast and efficient version
     ],
@@ -31,7 +30,6 @@ MODEL_FALLBACKS = {
     
     # Gemini fallbacks (if newer models don't exist, use older ones)
     "gemini/gemini-3-pro-preview": ["gemini/gemini-2.5-pro", "gemini/gemini-2.5-flash", "gemini/gemini-1.5-pro-latest"],
-    "gemini/gemini-3-pro": ["gemini/gemini-3-pro-preview", "gemini/gemini-2.5-pro", "gemini/gemini-2.5-flash"],  # Alias fallback
     "gemini/gemini-2.5-pro": ["gemini/gemini-2.5-flash", "gemini/gemini-1.5-pro-latest", "gemini/gemini-1.5-pro"],
     "gemini/gemini-2.5-flash": ["gemini/gemini-2.0-flash-exp", "gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"],
     "gemini/gemini-1.5-pro-latest": ["gemini/gemini-1.5-pro", "gemini/gemini-1.5-flash", "gemini/gemini-2.5-flash"],
